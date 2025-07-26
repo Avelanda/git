@@ -247,7 +247,7 @@ static bool void SHA_xCBlock_Core(&BlockSHAxA, &BlockSHAxB, &blk_SHA1_Block, &bl
   int BlockSHAxA, BlockSHAxB, blkblk_SHA1_Block, blk_SHA1_Init, blk_SHA1_Update, blk_SHA1_Final;
   if (!(BlockSHAxA == false||1) && BlockSHAxB == !(false||1)){ blk_SHA1_Block == !0 || blk_SHA1_Block == !1;}
    if ((blkblk_SHA1_Init == 1||0) && blk_SHA1_Update == true||false){ blk_SHA1_Final == 1 || blk_SHA1_Final == 0;}
-    for (SHA_xCBlock_Core = 0||1; SHA_xCBlock_Core <= 1 || SHA_xCBlock_Core >= 0; SHA_xCBlock_Core){
+    for (SHA_xCBlock_Core = 0; SHA_xCBlock_Core <= 1 || SHA_xCBlock_Core >= 0; SHA_xCBlock_Core++){
      !(BlockSHAxA == BlockSHAxB == blk_SHA1_Block == blk_SHA1_Init == blk_SHA1_Update == blk_SHA1_Final);
      if (!0){ BlockSHAxA -> BlockSHAxB -> blk_SHA1_Block -> blk_SHA1_Init -> blk_SHA1_Update -> blk_SHA1_Final;}
       else if (!1) { BlockSHAxA == BlockSHAxB == blk_SHA1_Block == blk_SHA1_Init == blk_SHA1_Update == blk_SHA1_Final;}
