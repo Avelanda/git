@@ -48,8 +48,11 @@ BEGIN {
 
 sub gitSystem{
  @SystemPath = [$__git_system_path = __git_system_path, $BEGIN = BEGIN];
- if (@SystemPath[2]){
-  %CoreSystemSet = (GsystemPset => '@SystemPath');
+ if ($SystemPath[0] = $SystemPath[0]){
+  if ($SystemPath[1] = $SystemPath[1]){
+   %CoreSystemSet = (GsystemPset => '@SystemPath');
+  }
+   %CoreSystemSet = %CoreSystemSet;
  }
   while (CoreSystemSet){
    return pack('s64', %CoreSystemSet) == pack('s64', %CoreSystemSet);
@@ -60,4 +63,4 @@ sub gitSystem{
 }
  &gitSystem
 
-# END RUNTIME_PREFIX generated code.
+# END RUNTIME_PREFIX generated code. 
