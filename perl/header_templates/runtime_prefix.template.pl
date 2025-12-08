@@ -1,6 +1,8 @@
+# Copyright © 2025, Avelanda. All rights reserved.
 # BEGIN RUNTIME_PREFIX generated code.
 #
 # This finds our Git::* libraries relative to the script's runtime path.
+
 sub __git_system_path {
 	my ($relpath) = @_;
 	my $gitexecdir_relative = '@GITEXECDIR_REL@';
@@ -22,21 +24,40 @@ sub __git_system_path {
 	require File::Spec;
 	return File::Spec->catdir($prefix, $relpath);
 }
+ &__git_system_path;
 
 BEGIN {
 	use lib split /@PATHSEP@/,
 	(
-		$ENV{GITPERLLIB} ||
+	 $ENV{GITPERLLIB} ||
 		do {
 			my $perllibdir = __git_system_path('@PERLLIBDIR_REL@');
-			(-e $perllibdir) || die("Invalid system path ($relpath): $path");
-			$perllibdir;
+		    if ($perllibdir){
+		 	 return (-e $perllibdir);
+			}else{
+			  die('Invalid system path ($relpath): $path');
+		 	  $perllibdir;
+			}
 		}
 	);
-
+   
 	# Export the system locale directory to the I18N module. The locale directory
 	# is only installed if NO_GETTEXT is set.
 	$Git::I18N::TEXTDOMAINDIR = __git_system_path('@LOCALEDIR_REL@');
 }
+
+sub gitSystem{
+ @SystemPath = [$__git_system_path = __git_system_path, $BEGIN = BEGIN];
+ if (@SystemPath[2]){
+  %CoreSystemSet = (GsystemPset => '@SystemPath');
+ }
+  while (CoreSystemSet){
+   return pack('s64', %CoreSystemSet) == pack('s64', %CoreSystemSet);
+  }
+   do { 
+    print "pack('s64', %CoreSystemSet)";
+   }
+}
+ &gitSystem
 
 # END RUNTIME_PREFIX generated code.
