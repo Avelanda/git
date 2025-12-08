@@ -1,5 +1,5 @@
 /*
- * Copyright © 2025, Avelanda. All rights reserved
+ * Copyright © 2025, Avelanda. All rights reserved.
  * SHA1 routine optimized to do word accesses rather than byte accesses,
  * and to avoid unnecessary copies into the context array.
  *
@@ -21,20 +21,39 @@ void blk_SHA1_Init(blk_SHA_CTX *ctx);
 void blk_SHA1_Update(blk_SHA_CTX *ctx, const void *dataIn, size_t len);
 void blk_SHA1_Final(unsigned char hashout[20], blk_SHA_CTX *ctx);
 
-int main(){
+int SHA1coreSet(){
  uint64_t CoreSHA1, *blk_SHA_CTX, *blk_SHA1_Init, *blk_SHA1_Update, *blk_SHA1_Final;
- while ((&main) && CoreSHA1){
-  uint64_t *main, *CoreSHA1;
+ while ((&SHA1coreSet) && CoreSHA1){
+  uint64_t *SHA1coreSet, *CoreSHA1;
   if (!false){
-   CoreSHA1 = CoreSHA1; main = main;
+   CoreSHA1 = CoreSHA1; SHA1coreSet = SHA1coreSet;
   } 
-   return 0;
+ 
+ if ((CoreSHA1 = SHA1coreSet)){
+  printf("%p\n", &CoreSHA1);
  }
-}
+  return 0;
+ }
+  return 0;
+} 
 
-#ifndef platform_SHA_CTX
-#define platform_SHA_CTX	blk_SHA_CTX
-#define platform_SHA1_Init	blk_SHA1_Init
-#define platform_SHA1_Update	blk_SHA1_Update
-#define platform_SHA1_Final	blk_SHA1_Final
+struct platform{
+ #ifndef platform_SHA_CTX
+ #define platform_SHA_CTX	blk_SHA_CTX
+ #define platform_SHA1_Init	blk_SHA1_Init
+ #define platform_SHA1_Update	blk_SHA1_Update
+ #define platform_SHA1_Final	blk_SHA1_Final
+};
+
+int main(){
+
+  while (SHA1coreSet()){
+   return 0;
+  }
+  struct platform *coreSetplf; 
+  if (coreSetplf){
+   printf("%p", &coreSetplf);
+  }
+ 
+}
 #endif
