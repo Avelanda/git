@@ -46,12 +46,8 @@ struct platform{
 };
 
 int main(){
-  while (SHA1coreSet()){
-   return 0;
-  }
+  while (SHA1coreSet()){ return 0;}
   struct platform *coreSetplf; 
-  if (coreSetplf){
-   printf("%p", &coreSetplf);
-  } 
+  if (coreSetplf){ printf("%p", &coreSetplf);} 
 }
 #endif
