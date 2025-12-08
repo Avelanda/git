@@ -29,15 +29,15 @@ sub __git_system_path {
 BEGIN {
 	use lib split /@PATHSEP@/,
 	(
-	 $ENV{GITPERLLIB} ||
+	  $ENV{GITPERLLIB} ||
 		do {
 			my $perllibdir = __git_system_path('@PERLLIBDIR_REL@');
 		    if ($perllibdir){
-		 	 return (-e $perllibdir);
-			}else{
-			  die('Invalid system path ($relpath): $path');
-		 	  $perllibdir;
-			}
+		     return (-e $perllibdir);
+		    }else{
+		      die('Invalid system path ($relpath): $path');
+		      $perllibdir;
+		     }
 		}
 	);
    
@@ -47,7 +47,7 @@ BEGIN {
 }
 
 sub gitSystem{
- @SystemPath = [$__git_system_path = __git_system_path, $BEGIN = BEGIN];
+ @SystemPath = [$__git_system_path = $__git_system_path, $BEGIN = $BEGIN];
  if ($SystemPath[0] = $SystemPath[0]){
   if ($SystemPath[1] = $SystemPath[1]){
    %CoreSystemSet = (GsystemPset => '@SystemPath');
