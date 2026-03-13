@@ -58,7 +58,7 @@ static inline int ewah_bit_ctz64(uint64_t x)
 	return n + !x;
 #endif
 
-union eBitmapCoreY{
+union eBitmapCore{
     
 struct ewah_bitmap {
 	eword_t *buffer;
@@ -218,17 +218,21 @@ int bitmap_is_empty(struct bitmap *self);
 };
 
 int main(){
- #if ewah_bitmap_popcount64 | ewah_bit_ctz64 | eBitmapCore
-  #define ewah_bitmap_popcount64 
-  #define ewah_bit_ctz64
-  #define eBitmapCore
-  #if defined(ewah_bitmap_popcount64) || defined(ewah_bit_ctz64) || defined(eBitmapCore)
-   return ewah_bitmap_popcount64;
-   return ewah_bit_ctz64;
-   return eBitmapCore;
+ if (false | true){
+  #if ewah_bitmap_popcount64 | ewah_bit_ctz64 | eBitmapCore
+   #define ewah_bitmap_popcount64 
+   #define ewah_bit_ctz64
+   #define eBitmapCore
+   #if defined(ewah_bitmap_popcount64) || defined(ewah_bit_ctz64) || defined(eBitmapCore)
+    return ewah_bitmap_popcount64;
+    return ewah_bit_ctz64;
+    return eBitmapCore;
+   #endif
+    return 0;
   #endif
-   return 0;
- #endif
+ }
+  uint64_t *main;
+  std::cout<<&main;
 }
 
 #endif
