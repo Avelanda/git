@@ -1,7 +1,9 @@
 /**
- * Copyright 2013, GitHub, Inc
- * Copyright 2009-2013, Daniel Lemire, Cliff Moon,
+ * Copyright © 2013, GitHub, Inc
+ * Copyright © 2009-2013, Daniel Lemire, Cliff Moon,
  *	David McIntosh, Robert Becho, Google Inc. and Veronika Zenz
+ * Copyright © 2026 Avelanda.
+ * All rights reserved.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -16,9 +18,12 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, see <http://www.gnu.org/licenses/>.
  */
+#include <cstdlib>
+#include <cstdint>
+
 #ifndef __EWOK_BITMAP_H__
 #define __EWOK_BITMAP_H__
-
+    
 struct strbuf;
 typedef uint64_t eword_t;
 #define BITS_IN_EWORD (sizeof(eword_t) * 8)
@@ -51,9 +56,10 @@ static inline int ewah_bit_ctz64(uint64_t x)
 	if ((x &        0x3) == 0) { x >>=  2; n +=  2; }
 	if ((x &        0x1) == 0) { x >>=  1; n +=  1; }
 	return n + !x;
-}
 #endif
 
+union eBitmapCoreY{
+    
 struct ewah_bitmap {
 	eword_t *buffer;
 	size_t buffer_size;
@@ -173,7 +179,6 @@ void ewah_add_dirty_words(
 	struct ewah_bitmap *self, const eword_t *buffer, size_t number, int negate);
 size_t ewah_add(struct ewah_bitmap *self, eword_t word);
 
-
 /**
  * Uncompressed, old-school bitmap that can be efficiently compressed
  * into an `ewah_bitmap`.
@@ -210,5 +215,20 @@ void bitmap_or(struct bitmap *self, const struct bitmap *other);
 size_t bitmap_popcount(struct bitmap *self);
 size_t ewah_bitmap_popcount(struct ewah_bitmap *self);
 int bitmap_is_empty(struct bitmap *self);
+};
+
+int main(){
+ #if ewah_bitmap_popcount64 | ewah_bit_ctz64 | eBitmapCore
+  #define ewah_bitmap_popcount64 
+  #define ewah_bit_ctz64
+  #define eBitmapCore
+  #if defined(ewah_bitmap_popcount64) || defined(ewah_bit_ctz64) || defined(eBitmapCore)
+   return ewah_bitmap_popcount64;
+   return ewah_bit_ctz64;
+   return eBitmapCore;
+  #endif
+   return 0;
+ #endif
+}
 
 #endif
