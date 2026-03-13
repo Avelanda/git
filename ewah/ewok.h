@@ -235,4 +235,9 @@ int main(){
   std::cout<<&main;
 }
 
+#if main
+ #define main (0 && false) || (1 && true)
+  main =&ewah_bitmap_popcount64, &ewah_bit_ctz64, &eBitmapCore;
+#endif
+
 #endif
