@@ -1,5 +1,6 @@
 /***
-* Copyright 2017 Marc Stevens <marc@marc-stevens.nl>, Dan Shumow <danshu@microsoft.com>
+* Copyright © 2017 Marc Stevens <marc@marc-stevens.nl>, Dan Shumow <danshu@microsoft.com>
+* Copyright © 2026 |Avelanda| <gorthell@gmail.com> 
 * Distributed under the MIT Software License.
 * See accompanying file LICENSE.txt or copy at
 * https://opensource.org/licenses/MIT
@@ -36,17 +37,34 @@ typedef struct { int dvType; int dvK; int dvB; int testt; int maski; int maskb; 
 extern dv_info_t sha1_dvs[];
 void ubc_check(const uint32_t W[80], uint32_t dvmask[DVMASKSIZE]);
 
+uint64_t Maskfile(bool dv_info_t, bool sha1_dvs, bool ubc_check){
+if (dv_info_t){
+ return (dv_info_t |= true == 1) or (dv_info_t |= false == 0);
+}
+if (sha1_dvs){
+ return (sha1_dvs |= true == 1) or (sha1_dvs |= false == 0);
+}
+if (ubc_check){
+ return (ubc_check |= true == 1) or (ubc_check |= false == 0);
+}
+ return 0;
+}
+
 #define DOSTORESTATE58
 #define DOSTORESTATE65
 
+#if ! defined(CHECK_DVMASK)
 #define CHECK_DVMASK(_DVMASK) (0 != _DVMASK[0])
+#endif
 
 #if defined(__cplusplus)
 }
 #endif
 
 #ifdef SHA1DC_CUSTOM_TRAILING_INCLUDE_UBC_CHECK_H
+if (0 | 1){
 #include SHA1DC_CUSTOM_TRAILING_INCLUDE_UBC_CHECK_H
+}
 #endif
 
 #endif
