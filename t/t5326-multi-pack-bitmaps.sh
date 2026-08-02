@@ -93,7 +93,8 @@ test_midx_bitmap_cases () {
 	test_expect_success 'setup test_repository' '
 		rm -rf * .git &&
 		git init &&
-		git config pack.writeBitmapLookupTable '"$writeLookupTable"'
+		git config pack.writeBitmapLookupTable '"$writeLookupTable"' &&
+		git config maintenance.auto false
 	'
 
 	midx_bitmap_core
@@ -120,7 +121,7 @@ test_midx_bitmap_cases () {
 			EOF
 
 			test_must_fail git multi-pack-index write --bitmap 2>err &&
-			grep "doesn.t have full closure" err &&
+			test_grep "doesn.t have full closure" err &&
 			test_path_is_missing $midx
 		)
 	'
@@ -214,8 +215,8 @@ test_midx_bitmap_cases () {
 			test_path_is_file $midx-$(midx_checksum $objdir).bitmap &&
 
 			test-tool bitmap list-commits | sort >bitmaps &&
-			grep "$(git rev-parse one)" bitmaps &&
-			grep "$(git rev-parse two)" bitmaps &&
+			test_grep "$(git rev-parse one)" bitmaps &&
+			test_grep "$(git rev-parse two)" bitmaps &&
 
 			rm -fr $midx-$(midx_checksum $objdir).bitmap &&
 			rm -fr $midx &&
@@ -228,8 +229,8 @@ test_midx_bitmap_cases () {
 			test_path_is_file $midx-$(midx_checksum $objdir).bitmap &&
 
 			test-tool bitmap list-commits | sort >bitmaps &&
-			grep "$(git rev-parse one)" bitmaps &&
-			! grep "$(git rev-parse two)" bitmaps
+			test_grep "$(git rev-parse one)" bitmaps &&
+			test_grep ! "$(git rev-parse two)" bitmaps
 		)
 	'
 
@@ -257,7 +258,7 @@ test_midx_bitmap_cases () {
 			test_line_count = 1 before &&
 
 			(
-				grep -vf before commits.raw &&
+				grep -vf before commits.raw && # lint-ok: data filter
 				# mark missing commits as preferred
 				sed "s/^/+/" before
 			) >snapshot &&
@@ -320,7 +321,7 @@ test_midx_bitmap_cases () {
 			git multi-pack-index write --bitmap --stdin-packs \
 				<packs 2>err &&
 
-			grep "bitmap without any objects" err &&
+			test_grep "bitmap without any objects" err &&
 
 			test_path_is_file $midx &&
 			test_path_is_missing $midx-$(midx_checksum $objdir).bitmap
@@ -343,7 +344,7 @@ test_midx_bitmap_cases () {
 
 			GIT_TEST_MIDX_READ_RIDX=0 \
 				git rev-list --use-bitmap-index HEAD 2>err &&
-			! grep "ignoring extra bitmap file" err
+			test_grep ! "ignoring extra bitmap file" err
 		)
 	'
 }
@@ -363,7 +364,7 @@ test_expect_success 'multi-pack-index write writes lookup table if enabled' '
 		git repack -ad &&
 		GIT_TRACE2_EVENT="$(pwd)/trace" \
 			git multi-pack-index write --bitmap &&
-		grep "\"label\":\"writing_lookup_table\"" trace
+		test_grep "\"label\":\"writing_lookup_table\"" trace
 	)
 '
 
@@ -431,7 +432,7 @@ test_expect_success 'tagged commits are selected for bitmapping' '
 
 		git rev-parse HEAD >want &&
 		test-tool bitmap list-commits >actual &&
-		grep $(cat want) actual
+		test_grep $(cat want) actual
 	)
 '
 
@@ -487,17 +488,17 @@ test_expect_success 'git fsck correctly identifies good and bad bitmaps' '
 
 	corrupt_file "$packbitmap" &&
 	test_must_fail git fsck 2>err &&
-	grep "bitmap file '\''$packbitmap'\'' has invalid checksum" err &&
+	test_grep "bitmap file '\''$packbitmap'\'' has invalid checksum" err &&
 
 	cp "$packbitmap.bak" "$packbitmap" &&
 	corrupt_file "$midxbitmap" &&
 	test_must_fail git fsck 2>err &&
-	grep "bitmap file '\''$midxbitmap'\'' has invalid checksum" err &&
+	test_grep "bitmap file '\''$midxbitmap'\'' has invalid checksum" err &&
 
 	corrupt_file "$packbitmap" &&
 	test_must_fail git fsck 2>err &&
-	grep "bitmap file '\''$midxbitmap'\'' has invalid checksum" err &&
-	grep "bitmap file '\''$packbitmap'\'' has invalid checksum" err
+	test_grep "bitmap file '\''$midxbitmap'\'' has invalid checksum" err &&
+	test_grep "bitmap file '\''$packbitmap'\'' has invalid checksum" err
 '
 
 test_expect_success 'corrupt MIDX with bitmap causes fallback' '

@@ -27,9 +27,11 @@ TEST_LINT ?= test-lint
 ifdef TEST_OUTPUT_DIRECTORY
 TEST_RESULTS_DIRECTORY = $(TEST_OUTPUT_DIRECTORY)/test-results
 CHAINLINTTMP = $(TEST_OUTPUT_DIRECTORY)/chainlinttmp
+GREPLINTTMP = $(TEST_OUTPUT_DIRECTORY)/greplinttmp
 else
 TEST_RESULTS_DIRECTORY = test-results
 CHAINLINTTMP = chainlinttmp
+GREPLINTTMP = greplinttmp
 endif
 
 # Shell quote;
@@ -38,6 +40,7 @@ TEST_SHELL_PATH_SQ = $(subst ','\'',$(TEST_SHELL_PATH))
 PERL_PATH_SQ = $(subst ','\'',$(PERL_PATH))
 TEST_RESULTS_DIRECTORY_SQ = $(subst ','\'',$(TEST_RESULTS_DIRECTORY))
 CHAINLINTTMP_SQ = $(subst ','\'',$(CHAINLINTTMP))
+GREPLINTTMP_SQ = $(subst ','\'',$(GREPLINTTMP))
 
 T = $(sort $(wildcard t[0-9][0-9][0-9][0-9]-*.sh))
 THELPERS = $(sort $(filter-out $(T),$(wildcard *.sh)))
@@ -45,6 +48,7 @@ TLIBS = $(sort $(wildcard lib-*.sh)) annotate-tests.sh
 TPERF = $(sort $(wildcard perf/p[0-9][0-9][0-9][0-9]-*.sh))
 TINTEROP = $(sort $(wildcard interop/i[0-9][0-9][0-9][0-9]-*.sh))
 CHAINLINTTESTS = $(sort $(patsubst chainlint/%.test,%,$(wildcard chainlint/*.test)))
+GREPLINTTESTS = $(sort $(patsubst greplint/%.test,%,$(wildcard greplint/*.test)))
 CHAINLINT = '$(PERL_PATH_SQ)' chainlint.pl
 UNIT_TEST_SOURCES = $(wildcard unit-tests/t-*.c)
 UNIT_TEST_PROGRAMS = $(patsubst unit-tests/%.c,unit-tests/bin/%$(X),$(UNIT_TEST_SOURCES))
@@ -63,8 +67,8 @@ test: pre-clean check-meson $(TEST_LINT)
 	$(CHAINLINTSUPPRESS) $(MAKE) aggregate-results-and-cleanup
 
 ifneq ($(PERL_PATH),)
-test: check-chainlint
-prove: check-chainlint
+test: check-chainlint check-greplint
+prove: check-chainlint check-greplint
 endif
 
 failed:
@@ -102,7 +106,7 @@ unit-tests-test-tool:
 pre-clean:
 	$(RM) -r '$(TEST_RESULTS_DIRECTORY_SQ)'
 
-clean-except-prove-cache: clean-chainlint
+clean-except-prove-cache: clean-chainlint clean-greplint
 	$(RM) -r 'trash directory'.*
 	$(RM) -r valgrind/bin
 
@@ -120,12 +124,22 @@ check-chainlint:
 	{ $(CHAINLINT) --emit-all '$(CHAINLINTTMP_SQ)'/tests >'$(CHAINLINTTMP_SQ)'/actual || true; } && \
 	diff -u '$(CHAINLINTTMP_SQ)'/expect '$(CHAINLINTTMP_SQ)'/actual
 
+clean-greplint:
+	$(RM) -r '$(GREPLINTTMP_SQ)'
+
+check-greplint:
+	@mkdir -p '$(GREPLINTTMP_SQ)' && \
+	'$(PERL_PATH_SQ)' greplint-cat.pl '$(GREPLINTTMP_SQ)' $(GREPLINTTESTS) && \
+	{ '$(PERL_PATH_SQ)' greplint.pl \
+		$(patsubst %,greplint/%.test,$(GREPLINTTESTS)) \
+		>'$(GREPLINTTMP_SQ)'/actual 2>&1 || true; } && \
+	diff -u '$(GREPLINTTMP_SQ)'/expect '$(GREPLINTTMP_SQ)'/actual
+
 check-meson:
 	@# awk acts up when trying to match single quotes, so we use \047 instead.
 	@mkdir -p mesontmp && \
 	printf "%s\n" \
 		"integration_tests t[0-9][0-9][0-9][0-9]-*.sh" \
-		"unit_test_programs unit-tests/t-*.c" \
 		"clar_test_suites unit-tests/u-*.c" | \
 	while read -r variable pattern; do \
 		awk "/^$$variable = \[\$$/ {flag=1 ; next } /^]$$/ { flag=0 } flag { gsub(/^  \047/, \"\"); gsub(/\047,\$$/, \"\"); print }" meson.build >mesontmp/meson.txt && \
@@ -140,7 +154,7 @@ check-meson:
 test-lint: test-lint-duplicates test-lint-executable \
 	test-lint-filenames
 ifneq ($(PERL_PATH),)
-test-lint: test-lint-shell-syntax
+test-lint: test-lint-shell-syntax test-greplint
 else
 GIT_TEST_CHAIN_LINT = 0
 endif
@@ -160,6 +174,9 @@ test-lint-executable:
 
 test-lint-shell-syntax:
 	@'$(PERL_PATH_SQ)' check-non-portable-shell.pl $(T) $(THELPERS) $(TPERF)
+
+test-greplint:
+	@'$(PERL_PATH_SQ)' greplint.pl $(T) $(THELPERS) $(TPERF)
 
 test-lint-filenames:
 	@# We do *not* pass a glob to ls-files but use grep instead, to catch
@@ -186,19 +203,14 @@ perf:
 	$(MAKE) -C perf/ all
 
 .PHONY: pre-clean $(T) aggregate-results clean valgrind perf \
-	check-chainlint clean-chainlint test-chainlint $(UNIT_TESTS)
+	check-chainlint clean-chainlint test-chainlint \
+	check-greplint clean-greplint test-greplint $(UNIT_TESTS)
 
 .PHONY: libgit-sys-test libgit-rs-test
 libgit-sys-test:
-	$(QUIET)(\
-		cd ../contrib/libgit-sys && \
-		cargo test \
-	)
-libgit-rs-test:
-	$(QUIET)(\
-		cd ../contrib/libgit-rs && \
-		cargo test \
-	)
+	$(QUIET)cargo test --manifest-path ../contrib/libgit-sys/Cargo.toml
+libgit-rs-test: libgit-sys-test
+	$(QUIET)cargo test --manifest-path ../contrib/libgit-rs/Cargo.toml
 ifdef INCLUDE_LIBGIT_RS
-all:: libgit-sys-test libgit-rs-test
+all:: libgit-rs-test
 endif

@@ -5,6 +5,7 @@
 #include "abspath.h"
 #include "config.h"
 #include "copy.h"
+#include "environment.h"
 #include "gettext.h"
 #include "hex.h"
 #include "lockfile.h"
@@ -402,12 +403,8 @@ static int handle_conflict(struct strbuf *out, struct rerere_io *io,
 			strbuf_addbuf(out, &two);
 			rerere_strbuf_putconflict(out, '>', marker_size);
 			if (ctx) {
-				git_hash_update(ctx, one.buf ?
-						one.buf : "",
-						one.len + 1);
-				git_hash_update(ctx, two.buf ?
-						two.buf : "",
-						two.len + 1);
+				git_hash_update(ctx, one.buf, one.len + 1);
+				git_hash_update(ctx, two.buf, two.len + 1);
 			}
 			break;
 		} else if (hunk == RR_SIDE_1)
@@ -442,7 +439,7 @@ static int handle_path(unsigned char *hash, struct rerere_io *io, int marker_siz
 	struct strbuf buf = STRBUF_INIT, out = STRBUF_INIT;
 	int has_conflicts = 0;
 	if (hash)
-		the_hash_algo->init_fn(&ctx);
+		git_hash_init(&ctx, the_hash_algo);
 
 	while (!io->getline(&buf, io)) {
 		if (is_cmarker(buf.buf, '<', marker_size)) {
@@ -551,7 +548,7 @@ static int check_one_conflict(struct index_state *istate, int i, int *type)
 
 /*
  * Scan the index and find paths that have conflicts that rerere can
- * handle, i.e. the ones that has both stages #2 and #3.
+ * handle, i.e. the ones that have both stages #2 and #3.
  *
  * NEEDSWORK: we do not record or replay a previous "resolve by
  * deletion" for a delete-modify conflict, as that is inherently risky
@@ -759,7 +756,7 @@ static void do_rerere_one_path(struct index_state *istate,
 	/* Has the user resolved it already? */
 	if (variant >= 0) {
 		if (!handle_file(istate, path, NULL, NULL)) {
-			copy_file(rerere_path(&buf, id, "postimage"), path, 0666);
+			copy_file(the_repository, rerere_path(&buf, id, "postimage"), path, 0666);
 			id->collection->status[variant] |= RR_HAS_POSTIMAGE;
 			fprintf_ln(stderr, _("Recorded resolution for '%s'."), path);
 			free_rerere_id(rr_item);
@@ -877,9 +874,9 @@ static int do_plain_rerere(struct repository *r,
 
 static void git_rerere_config(void)
 {
-	git_config_get_bool("rerere.enabled", &rerere_enabled);
-	git_config_get_bool("rerere.autoupdate", &rerere_autoupdate);
-	git_config(git_default_config, NULL);
+	repo_config_get_bool(the_repository, "rerere.enabled", &rerere_enabled);
+	repo_config_get_bool(the_repository, "rerere.autoupdate", &rerere_autoupdate);
+	repo_config(the_repository, git_default_config, NULL);
 }
 
 static GIT_PATH_FUNC(git_path_rr_cache, "rr-cache")
@@ -914,9 +911,9 @@ int setup_rerere(struct repository *r, struct string_list *merge_rr, int flags)
 	if (flags & RERERE_READONLY)
 		fd = 0;
 	else
-		fd = hold_lock_file_for_update(&write_lock,
-					       git_path_merge_rr(r),
-					       LOCK_DIE_ON_ERROR);
+		fd = repo_hold_lock_file_for_update(r, &write_lock,
+						    git_path_merge_rr(r),
+						    LOCK_DIE_ON_ERROR);
 	read_rr(r, merge_rr);
 	return fd;
 }
@@ -993,7 +990,7 @@ static int handle_cache(struct index_state *istate,
 
 	while (pos < istate->cache_nr) {
 		enum object_type type;
-		unsigned long size;
+		size_t size;
 
 		ce = istate->cache[pos++];
 		if (ce_namelen(ce) != len || memcmp(ce->name, path, len))
@@ -1247,7 +1244,7 @@ void rerere_gc(struct repository *r, struct string_list *rr)
 				       &cutoff_resolve, now);
 	repo_config_get_expiry_in_days(the_repository, "gc.rerereunresolved",
 				       &cutoff_noresolve, now);
-	git_config(git_default_config, NULL);
+	repo_config(the_repository, git_default_config, NULL);
 	dir = opendir(repo_git_path_replace(the_repository, &buf, "rr-cache"));
 	if (!dir)
 		die_errno(_("unable to open rr-cache directory"));

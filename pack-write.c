@@ -402,8 +402,8 @@ void fixup_pack_header_footer(const struct git_hash_algo *hash_algo,
 	char *buf;
 	ssize_t read_result;
 
-	hash_algo->init_fn(&old_hash_ctx);
-	hash_algo->init_fn(&new_hash_ctx);
+	git_hash_init(&old_hash_ctx, hash_algo);
+	git_hash_init(&new_hash_ctx, hash_algo);
 
 	if (lseek(pack_fd, 0, SEEK_SET) != 0)
 		die_errno("Failed seeking to start of '%s'", pack_name);
@@ -455,7 +455,7 @@ void fixup_pack_header_footer(const struct git_hash_algo *hash_algo,
 			 * pack, which also means making partial_pack_offset
 			 * big enough not to matter anymore.
 			 */
-			hash_algo->init_fn(&old_hash_ctx);
+			git_hash_init(&old_hash_ctx, hash_algo);
 			partial_pack_offset = ~partial_pack_offset;
 			partial_pack_offset -= MSB(partial_pack_offset, 1);
 		}
@@ -538,22 +538,24 @@ struct hashfile *create_tmp_packfile(struct repository *repo,
 	return hashfd(repo->hash_algo, fd, *pack_tmp_name);
 }
 
-static void rename_tmp_packfile(struct strbuf *name_prefix, const char *source,
+static void rename_tmp_packfile(struct repository *repo,
+				struct strbuf *name_prefix, const char *source,
 				const char *ext)
 {
 	size_t name_prefix_len = name_prefix->len;
 
 	strbuf_addstr(name_prefix, ext);
-	if (finalize_object_file(source, name_prefix->buf))
+	if (finalize_object_file(repo, source, name_prefix->buf))
 		die("unable to rename temporary file to '%s'",
 		    name_prefix->buf);
 	strbuf_setlen(name_prefix, name_prefix_len);
 }
 
-void rename_tmp_packfile_idx(struct strbuf *name_buffer,
+void rename_tmp_packfile_idx(struct repository *repo,
+			     struct strbuf *name_buffer,
 			     char **idx_tmp_name)
 {
-	rename_tmp_packfile(name_buffer, *idx_tmp_name, "idx");
+	rename_tmp_packfile(repo, name_buffer, *idx_tmp_name, "idx");
 }
 
 void stage_tmp_packfiles(struct repository *repo,
@@ -586,11 +588,11 @@ void stage_tmp_packfiles(struct repository *repo,
 						    hash);
 	}
 
-	rename_tmp_packfile(name_buffer, pack_tmp_name, "pack");
+	rename_tmp_packfile(repo, name_buffer, pack_tmp_name, "pack");
 	if (rev_tmp_name)
-		rename_tmp_packfile(name_buffer, rev_tmp_name, "rev");
+		rename_tmp_packfile(repo, name_buffer, rev_tmp_name, "rev");
 	if (mtimes_tmp_name)
-		rename_tmp_packfile(name_buffer, mtimes_tmp_name, "mtimes");
+		rename_tmp_packfile(repo, name_buffer, mtimes_tmp_name, "mtimes");
 
 	free(rev_tmp_name);
 	free(mtimes_tmp_name);

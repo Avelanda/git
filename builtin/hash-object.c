@@ -8,6 +8,7 @@
 #include "builtin.h"
 #include "abspath.h"
 #include "config.h"
+#include "environment.h"
 #include "gettext.h"
 #include "hex.h"
 #include "object-file.h"
@@ -99,9 +100,9 @@ int cmd_hash_object(int argc,
 			     hash_object_usage, 0);
 
 	if (flags & INDEX_WRITE_OBJECT)
-		prefix = setup_git_directory();
+		prefix = setup_git_directory(the_repository);
 	else
-		prefix = setup_git_directory_gently(&nongit);
+		prefix = setup_git_directory_gently(the_repository, &nongit);
 
 	if (nongit && !the_hash_algo)
 		repo_set_hash_algo(the_repository, GIT_HASH_DEFAULT);
@@ -111,7 +112,7 @@ int cmd_hash_object(int argc,
 		vpath = vpath_free;
 	}
 
-	git_config(git_default_config, NULL);
+	repo_config(the_repository, git_default_config, NULL);
 
 	if (stdin_paths) {
 		if (hashstdin)

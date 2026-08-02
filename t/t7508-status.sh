@@ -16,7 +16,7 @@ test_expect_success 'status -h in broken repository' '
 		cd broken &&
 		git init &&
 		echo "[status] showuntrackedfiles = CORRUPT" >>.git/config &&
-		test_expect_code 129 git status -h >usage 2>&1
+		git status -h >usage 2>&1
 	) &&
 	test_grep "[Uu]sage" broken/usage
 '
@@ -28,7 +28,7 @@ test_expect_success 'commit -h in broken repository' '
 		cd broken &&
 		git init &&
 		echo "[status] showuntrackedfiles = CORRUPT" >>.git/config &&
-		test_expect_code 129 git commit -h >usage 2>&1
+		git commit -h >usage 2>&1
 	) &&
 	test_grep "[Uu]sage" broken/usage
 '
@@ -263,6 +263,7 @@ test_expect_success 'status with gitignore' '
 	!! untracked
 	EOF
 	git status -s --ignored >output &&
+	test_filter_gitconfig output &&
 	test_cmp expect output &&
 
 	cat >expect <<\EOF &&
@@ -296,6 +297,7 @@ Ignored files:
 
 EOF
 	git status --ignored >output &&
+	test_filter_gitconfig output &&
 	test_cmp expect output
 '
 
@@ -328,6 +330,7 @@ test_expect_success 'status with gitignore (nothing untracked)' '
 	!! untracked
 	EOF
 	git status -s --ignored >output &&
+	test_filter_gitconfig output &&
 	test_cmp expect output &&
 
 	cat >expect <<\EOF &&
@@ -358,6 +361,7 @@ Ignored files:
 
 EOF
 	git status --ignored >output &&
+	test_filter_gitconfig output &&
 	test_cmp expect output
 '
 
@@ -717,6 +721,17 @@ test_expect_success TTY 'status -s with color.status' '
 
 '
 
+test_expect_success TTY 'status -s keeps colors with -z' '
+	test_when_finished "rm -f output.*" &&
+	test_terminal git status -s -z >output.raw &&
+	# convert back to newlines to avoid portability issues with
+	# test_decode_color and test_cmp, and to let us use the same expected
+	# output as earlier tests
+	tr "\0" "\n" <output.raw >output.nl &&
+	test_decode_color <output.nl >output &&
+	test_cmp expect output
+'
+
 cat >expect <<\EOF
 ## <YELLOW>main<RESET>...<CYAN>upstream<RESET> [ahead <YELLOW>1<RESET>, behind <CYAN>2<RESET>]
  <RED>M<RESET> dir1/modified
@@ -762,8 +777,8 @@ test_expect_success TTY 'status --porcelain ignores color.status' '
 '
 
 # recover unconditionally from color tests
-git config --unset color.status
-git config --unset color.ui
+git config --unset color.status || :
+git config --unset color.ui || :
 
 test_expect_success 'status --porcelain respects -b' '
 
@@ -848,7 +863,7 @@ test_expect_success 'status -s without relative paths' '
 	test_cmp expect output &&
 
 	git status -s --ignored >output &&
-	grep "^!! \"expect with spaces\"$" output &&
+	test_grep "^!! \"expect with spaces\"$" output &&
 	grep -v "^!! " output >output-wo-ignored &&
 	test_cmp expect output-wo-ignored
 '
@@ -893,7 +908,7 @@ test_expect_success 'status shows detached HEAD properly after checking out non-
 	git clone upstream downstream &&
 	git -C downstream checkout @{u} &&
 	git -C downstream status >actual &&
-	grep -E "HEAD detached at [0-9a-f]+" actual
+	test_grep -E "HEAD detached at [0-9a-f]+" actual
 '
 
 test_expect_success 'setup status submodule summary' '
@@ -1112,7 +1127,7 @@ test_expect_success POSIXPERM,SANITY 'status succeeds in a read-only repository'
 		# make dir1/tracked stat-dirty
 		>dir1/tracked1 && mv -f dir1/tracked1 dir1/tracked &&
 		git status -s >output &&
-		! grep dir1/tracked output &&
+		test_grep ! dir1/tracked output &&
 		# make sure "status" succeeded without writing index out
 		git diff-files | grep dir1/tracked
 	)
@@ -1565,7 +1580,7 @@ test_expect_success 'git commit will commit a staged but ignored submodule' '
 
 test_expect_success 'git commit --dry-run will show a staged but ignored submodule' '
 	git reset HEAD^ &&
-	git add sm &&
+	git add --force sm &&
 	cat >expect << EOF &&
 On branch main
 Your branch and '\''upstream'\'' have diverged,
@@ -1758,7 +1773,7 @@ test_expect_success 'slow status advice when core.untrackedCache true, and fsmon
 	)
 '
 
-test_expect_success EXPENSIVE 'status does not re-read unchanged 4 or 8 GiB file' '
+test_expect_success EXPENSIVE,SIZE_T_IS_64BIT 'status does not re-read unchanged 4 or 8 GiB file' '
 	(
 		mkdir large-file &&
 		cd large-file &&

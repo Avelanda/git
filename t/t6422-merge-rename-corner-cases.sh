@@ -916,8 +916,8 @@ test_expect_success 'rad-check: rename/add/delete conflict' '
 		# bar should have two-way merged contents of the different
 		# versions of bar; check that content from both sides is
 		# present.
-		grep original bar &&
-		grep different bar
+		test_grep original bar &&
+		test_grep different bar
 	)
 '
 
@@ -991,8 +991,8 @@ test_expect_success 'rrdd-check: rename/rename(2to1)/delete/delete conflict' '
 		# baz should have two-way merged contents of the original
 		# contents of foo and bar; check that content from both sides
 		# is present.
-		grep foo baz &&
-		grep bar baz
+		test_grep foo baz &&
+		test_grep bar baz
 	)
 '
 
@@ -1436,6 +1436,146 @@ test_expect_success 'rename/rename(1to2) with a binary file' '
 		git rev-parse A:orig-A B:orig-B >expect &&
 		git hash-object orig-A orig-B >actual &&
 		test_cmp expect actual
+	)
+'
+
+# Testcase preliminary submodule/directory conflict and submodule rename
+#   Commit O: <empty, or additional irrelevant stuff>
+#   Commit A1: introduce "folder" (as a tree)
+#   Commit B1: introduce "folder" (as a submodule)
+#   Commit A2: merge B1 into A1, but keep folder as a tree
+#   Commit B2: merge A1 into B1, but keep folder as a submodule
+#   Merge A2 & B2
+test_setup_submodule_directory_preliminary_conflict () {
+	git init submodule_directory_preliminary_conflict &&
+	(
+		cd submodule_directory_preliminary_conflict &&
+
+		# Trying to do the A2 and B2 merges above is slightly more
+		# challenging with a local submodule (because checking out
+		# another commit has the submodule in the way).  Instead,
+		# first create the commits with the wrong parents but right
+		# trees, in the order A1, A2, B1, B2...
+		#
+		# Then go back and create new A2 & B2 with the correct
+		# parents and the same trees.
+
+		git commit --allow-empty -m orig &&
+
+		git branch A &&
+		git branch B &&
+
+		git checkout B &&
+		mkdir folder &&
+		echo A>folder/A &&
+		echo B>folder/B &&
+		echo C>folder/C &&
+		echo D>folder/D &&
+		echo E>folder/E &&
+		git add folder &&
+		git commit -m B1 &&
+
+		git commit --allow-empty -m B2 &&
+
+		git checkout A &&
+		git init folder &&
+		(
+			cd folder &&
+			>Z &&
+			>Y &&
+			git add Z Y &&
+			git commit -m "original submodule commit"
+		) &&
+		git add folder &&
+		git commit -m A1 &&
+
+		git commit --allow-empty -m A2 &&
+
+		NewA2=$(git commit-tree -p A^ -p B^ -m "Merge B into A" A^{tree}) &&
+		NewB2=$(git commit-tree -p B^ -p A^ -m "Merge A into B" B^{tree}) &&
+		git update-ref refs/heads/A $NewA2 &&
+		git update-ref refs/heads/B $NewB2
+	)
+}
+
+test_expect_success 'submodule/directory preliminary conflict' '
+	test_setup_submodule_directory_preliminary_conflict &&
+	(
+		cd submodule_directory_preliminary_conflict &&
+
+		git checkout A^0 &&
+
+		test_expect_code 1 git merge B^0 &&
+
+		# Make sure the index has the right number of entries
+		git ls-files -s >actual &&
+		test_line_count = 2 actual &&
+
+		# The "folder" as directory should have been resolved away
+		# as part of the merge.  The "folder" as submodule got
+		# renamed to "folder~Temporary merge branch 2" in the
+		# virtual merge base, resulting in a
+		#    "folder~Temporary merge branch 2" -> "folder"
+		# rename in the outermerge for the submodule, which then
+		# becomes part of a rename/delete conflict (because "folder"
+		# as a submodule was deleted in A2).
+		submod=$(git rev-parse A:folder) &&
+		printf "160000 $submod 1\tfolder\n160000 $submod 2\tfolder\n" >expect &&
+		test_cmp expect actual
+	)
+'
+
+# Testcase: submodule/directory conflict with duplicate tree entries
+#   One side has a path as a gitlink (submodule).  The other side replaces
+#   the gitlink with a directory.  A third-party tool creates a tree on the
+#   submodule side that has *both* a gitlink and a tree entry for the same
+#   path (adding a file inside the submodule path ignoring that there's a
+#   gitlink there).  collect_merge_info_callback() should detect the
+#   duplicate and abort rather than silently corrupting its bookkeeping.
+
+test_expect_success 'duplicate tree entries trigger an error' '
+	test_when_finished "rm -rf duplicate-entry" &&
+	git init duplicate-entry &&
+	(
+		cd duplicate-entry &&
+
+		# Base commit: "docs" is a gitlink (submodule)
+		empty_tree=$(git mktree </dev/null) &&
+		fake_commit=$(git commit-tree $empty_tree </dev/null) &&
+		git update-index --add --cacheinfo 160000,$fake_commit,docs &&
+		echo base >file.txt &&
+		git add file.txt &&
+		git commit -m base &&
+
+		# side1: remove the gitlink, replace with a directory
+		git checkout -b side1 &&
+		git rm --cached docs &&
+		mkdir -p docs &&
+		echo hello >docs/requirements.txt &&
+		git add docs/requirements.txt &&
+		git commit -m "side1: submodule to directory" &&
+
+		# side2: keep the gitlink but craft a tree that also
+		# contains a tree entry for "docs" (simulating a tool
+		# that adds files inside a submodule path without
+		# removing the gitlink first).
+		git checkout main &&
+		git checkout -b side2 &&
+		blob_oid=$(echo world | git hash-object -w --stdin) &&
+		docs_tree=$(printf "100644 blob %s\trequirements.txt\n" \
+			"$blob_oid" | git mktree) &&
+		cur_tree=$(git rev-parse HEAD^{tree}) &&
+		git cat-file -p $cur_tree >tree-listing &&
+		printf "040000 tree %s\tdocs\n" "$docs_tree" >>tree-listing &&
+		new_tree=$(git mktree <tree-listing) &&
+		side2_commit=$(git commit-tree $new_tree -p HEAD \
+			-m "side2: add file alongside submodule") &&
+		git update-ref refs/heads/side2 $side2_commit &&
+
+		# Merging must detect the duplicate and abort
+		git checkout side1 &&
+		test_must_fail git merge side2 2>err &&
+		test_grep "duplicate entries" err
 	)
 '
 

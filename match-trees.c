@@ -61,7 +61,7 @@ static void *fill_tree_desc_strict(struct repository *r,
 {
 	void *buffer;
 	enum object_type type;
-	unsigned long size;
+	size_t size;
 
 	buffer = odb_read_object(r->objects, hash, &type, &size);
 	if (!buffer)
@@ -186,7 +186,7 @@ static int splice_tree(struct repository *r,
 	char *subpath;
 	int toplen;
 	char *buf;
-	unsigned long sz;
+	size_t sz;
 	struct tree_desc desc;
 	unsigned char *rewrite_here;
 	const struct object_id *rewrite_with;
@@ -246,7 +246,7 @@ static int splice_tree(struct repository *r,
 		rewrite_with = oid2;
 	}
 	hashcpy(rewrite_here, rewrite_with->hash, r->hash_algo);
-	status = write_object_file(buf, sz, OBJ_TREE, result);
+	status = odb_write_object(r->objects, buf, sz, OBJ_TREE, result);
 	free(buf);
 	return status;
 }

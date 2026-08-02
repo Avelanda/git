@@ -26,6 +26,23 @@ test_expect_success 'git diff --no-index directories' '
 	test_line_count = 14 cnt
 '
 
+test_expect_success 'git diff --no-index with -' '
+	cat >expect <<-\EOF &&
+	diff --git a/- b/-
+	new file mode 100644
+	--- /dev/null
+	+++ b/-
+	@@ -0,0 +1 @@
+	+frotz
+	EOF
+	(
+		cd a &&
+		echo frotz |
+		test_expect_code 1 git diff --no-index /dev/null - >../actual
+	) &&
+	test_cmp expect actual
+'
+
 test_expect_success 'git diff --no-index relative path outside repo' '
 	(
 		cd repo &&
@@ -56,6 +73,16 @@ test_expect_success 'git diff --no-index executed outside repo gives correct err
 		cd non/git &&
 		test_must_fail git diff --no-index a 2>actual.err &&
 		test_grep "usage: git diff --no-index" actual.err
+	)
+'
+
+test_expect_success 'git diff --find-object outside repo fails gracefully' '
+	(
+		GIT_CEILING_DIRECTORIES=$TRASH_DIRECTORY/non &&
+		export GIT_CEILING_DIRECTORIES &&
+		cd non/git &&
+		test_must_fail git diff --find-object=abc123 2>err &&
+		test_grep "find-object requires a git repository" err
 	)
 '
 
@@ -256,14 +283,14 @@ test_expect_success "diff --no-index -R treats '-' as stdin" '
 
 test_expect_success 'diff --no-index refuses to diff stdin and a directory' '
 	test_must_fail git diff --no-index -- - a </dev/null 2>err &&
-	grep "fatal: cannot compare stdin to a directory" err
+	test_grep "fatal: cannot compare stdin to a directory" err
 '
 
 test_expect_success PIPE 'diff --no-index refuses to diff a named pipe and a directory' '
 	test_when_finished "rm -f pipe" &&
 	mkfifo pipe &&
 	test_must_fail git diff --no-index -- pipe a 2>err &&
-	grep "fatal: cannot compare a named pipe to a directory" err
+	test_grep "fatal: cannot compare a named pipe to a directory" err
 '
 
 test_expect_success PIPE,SYMLINKS 'diff --no-index reads from pipes' '
@@ -316,6 +343,22 @@ test_expect_success 'diff --no-index rejects absolute pathspec' '
 
 test_expect_success 'diff --no-index with pathspec' '
 	test_expect_code 1 git diff --name-status --no-index a b 1 >actual &&
+	cat >expect <<-EOF &&
+	D	a/1
+	EOF
+	test_cmp expect actual
+'
+
+test_expect_success 'diff --no-index first path ending in slash with pathspec' '
+	test_expect_code 1 git diff --name-status --no-index a/ b 1 >actual &&
+	cat >expect <<-EOF &&
+	D	a/1
+	EOF
+	test_cmp expect actual
+'
+
+test_expect_success 'diff --no-index second path ending in slash with pathspec' '
+	test_expect_code 1 git diff --name-status --no-index a b/ 1 >actual &&
 	cat >expect <<-EOF &&
 	D	a/1
 	EOF

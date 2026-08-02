@@ -10,6 +10,7 @@
 #include "builtin.h"
 
 #include "abspath.h"
+#include "bisect.h"
 #include "config.h"
 #include "commit.h"
 #include "environment.h"
@@ -217,19 +218,17 @@ static int show_default(void)
 	return 0;
 }
 
-static int show_reference(const char *refname, const char *referent UNUSED, const struct object_id *oid,
-			  int flag UNUSED, void *cb_data UNUSED)
+static int show_reference(const struct reference *ref, void *cb_data UNUSED)
 {
-	if (ref_excluded(&ref_excludes, refname))
+	if (ref_excluded(&ref_excludes, ref->name))
 		return 0;
-	show_rev(NORMAL, oid, refname);
+	show_rev(NORMAL, ref->oid, ref->name);
 	return 0;
 }
 
-static int anti_reference(const char *refname, const char *referent UNUSED, const struct object_id *oid,
-			  int flag UNUSED, void *cb_data UNUSED)
+static int anti_reference(const struct reference *ref, void *cb_data UNUSED)
 {
-	show_rev(REVERSED, oid, refname);
+	show_rev(REVERSED, ref->oid, ref->name);
 	return 0;
 }
 
@@ -256,7 +255,7 @@ static int show_file(const char *arg, int output_prefix)
 	show_default();
 	if ((filter & (DO_NONFLAGS|DO_NOREV)) == (DO_NONFLAGS|DO_NOREV)) {
 		if (output_prefix) {
-			const char *prefix = startup_info->prefix;
+			const char *prefix = the_repository->prefix;
 			char *fname = prefix_filename(prefix, arg);
 			show(fname);
 			free(fname);
@@ -269,21 +268,20 @@ static int show_file(const char *arg, int output_prefix)
 
 static int try_difference(const char *arg)
 {
-	char *dotdot;
+	const char *dotdot;
 	struct object_id start_oid;
 	struct object_id end_oid;
 	const char *end;
 	const char *start;
+	char *to_free;
 	int symmetric;
 	static const char head_by_default[] = "HEAD";
 
 	if (!(dotdot = strstr(arg, "..")))
 		return 0;
+	start = to_free = xmemdupz(arg, dotdot - arg);
 	end = dotdot + 2;
-	start = arg;
 	symmetric = (*end == '.');
-
-	*dotdot = 0;
 	end += symmetric;
 
 	if (!*end)
@@ -297,7 +295,7 @@ static int try_difference(const char *arg)
 		 * Just ".."?  That is not a range but the
 		 * pathspec for the parent directory.
 		 */
-		*dotdot = '.';
+		free(to_free);
 		return 0;
 	}
 
@@ -310,7 +308,7 @@ static int try_difference(const char *arg)
 			a = lookup_commit_reference(the_repository, &start_oid);
 			b = lookup_commit_reference(the_repository, &end_oid);
 			if (!a || !b) {
-				*dotdot = '.';
+				free(to_free);
 				return 0;
 			}
 			if (repo_get_merge_bases(the_repository, a, b, &exclude) < 0)
@@ -320,16 +318,16 @@ static int try_difference(const char *arg)
 				show_rev(REVERSED, &commit->object.oid, NULL);
 			}
 		}
-		*dotdot = '.';
+		free(to_free);
 		return 1;
 	}
-	*dotdot = '.';
+	free(to_free);
 	return 0;
 }
 
 static int try_parent_shorthands(const char *arg)
 {
-	char *dotdot;
+	const char *mark;
 	struct object_id oid;
 	struct commit *commit;
 	struct commit_list *parents;
@@ -337,38 +335,39 @@ static int try_parent_shorthands(const char *arg)
 	int include_rev = 0;
 	int include_parents = 0;
 	int exclude_parent = 0;
+	char *to_free;
 
-	if ((dotdot = strstr(arg, "^!"))) {
+	if ((mark = strstr(arg, "^!"))) {
 		include_rev = 1;
-		if (dotdot[2])
+		if (mark[2])
 			return 0;
-	} else if ((dotdot = strstr(arg, "^@"))) {
+	} else if ((mark = strstr(arg, "^@"))) {
 		include_parents = 1;
-		if (dotdot[2])
+		if (mark[2])
 			return 0;
-	} else if ((dotdot = strstr(arg, "^-"))) {
+	} else if ((mark = strstr(arg, "^-"))) {
 		include_rev = 1;
 		exclude_parent = 1;
 
-		if (dotdot[2]) {
+		if (mark[2]) {
 			char *end;
-			exclude_parent = strtoul(dotdot + 2, &end, 10);
+			exclude_parent = strtoul(mark + 2, &end, 10);
 			if (*end != '\0' || !exclude_parent)
 				return 0;
 		}
 	} else
 		return 0;
 
-	*dotdot = 0;
+	arg = to_free = xmemdupz(arg, mark - arg);
 	if (repo_get_oid_committish(the_repository, arg, &oid) ||
 	    !(commit = lookup_commit_reference(the_repository, &oid))) {
-		*dotdot = '^';
+		free(to_free);
 		return 0;
 	}
 
 	if (exclude_parent &&
 	    exclude_parent > commit_list_count(commit->parents)) {
-		*dotdot = '^';
+		free(to_free);
 		return 0;
 	}
 
@@ -389,7 +388,7 @@ static int try_parent_shorthands(const char *arg)
 		free(name);
 	}
 
-	*dotdot = '^';
+	free(to_free);
 	return 1;
 }
 
@@ -615,13 +614,22 @@ static int opt_with_value(const char *arg, const char *opt, const char **value)
 
 static void handle_ref_opt(const char *pattern, const char *prefix)
 {
-	if (pattern)
-		refs_for_each_glob_ref_in(get_main_ref_store(the_repository),
-					  show_reference, pattern, prefix,
-					  NULL);
-	else
-		refs_for_each_ref_in(get_main_ref_store(the_repository),
-				     prefix, show_reference, NULL);
+	if (pattern) {
+		struct refs_for_each_ref_options opts = {
+			.pattern = pattern,
+			.prefix = prefix,
+			.trim_prefix = prefix ? strlen(prefix) : 0,
+		};
+		refs_for_each_ref_ext(get_main_ref_store(the_repository),
+				      show_reference, NULL, &opts);
+	} else {
+		struct refs_for_each_ref_options opts = {
+			.prefix = prefix,
+			.trim_prefix = strlen(prefix),
+		};
+		refs_for_each_ref_ext(get_main_ref_store(the_repository),
+				      show_reference, NULL, &opts);
+	}
 	clear_ref_exclusions(&ref_excludes);
 }
 
@@ -645,53 +653,46 @@ enum default_type {
 	DEFAULT_UNMODIFIED,
 };
 
-static void print_path(const char *path, const char *prefix, enum format_type format, enum default_type def)
+static void print_path(const char *path, const char *prefix,
+		       enum format_type format, enum default_type def)
 {
-	char *cwd = NULL;
-	/*
-	 * We don't ever produce a relative path if prefix is NULL, so set the
-	 * prefix to the current directory so that we can produce a relative
-	 * path whenever possible.  If we're using RELATIVE_IF_SHARED mode, then
-	 * we want an absolute path unless the two share a common prefix, so don't
-	 * set it in that case, since doing so causes a relative path to always
-	 * be produced if possible.
-	 */
-	if (!prefix && (format != FORMAT_DEFAULT || def != DEFAULT_RELATIVE_IF_SHARED))
-		prefix = cwd = xgetcwd();
-	if (format == FORMAT_DEFAULT && def == DEFAULT_UNMODIFIED) {
-		puts(path);
-	} else if (format == FORMAT_RELATIVE ||
-		  (format == FORMAT_DEFAULT && def == DEFAULT_RELATIVE)) {
-		/*
-		 * In order for relative_path to work as expected, we need to
-		 * make sure that both paths are absolute paths.  If we don't,
-		 * we can end up with an unexpected absolute path that the user
-		 * didn't want.
-		 */
-		struct strbuf buf = STRBUF_INIT, realbuf = STRBUF_INIT, prefixbuf = STRBUF_INIT;
-		if (!is_absolute_path(path)) {
-			strbuf_realpath_forgiving(&realbuf, path,  1);
-			path = realbuf.buf;
+	struct strbuf sb = STRBUF_INIT;
+	enum path_format fmt;
+
+	if (format == FORMAT_DEFAULT) {
+		switch (def) {
+		case DEFAULT_RELATIVE:
+			fmt = PATH_FORMAT_RELATIVE;
+			break;
+		case DEFAULT_RELATIVE_IF_SHARED:
+			fmt = PATH_FORMAT_RELATIVE_IF_SHARED;
+			break;
+		case DEFAULT_CANONICAL:
+			fmt = PATH_FORMAT_CANONICAL;
+			break;
+		case DEFAULT_UNMODIFIED:
+		default:
+			fmt = PATH_FORMAT_UNMODIFIED;
+			break;
 		}
-		if (!is_absolute_path(prefix)) {
-			strbuf_realpath_forgiving(&prefixbuf, prefix, 1);
-			prefix = prefixbuf.buf;
-		}
-		puts(relative_path(path, prefix, &buf));
-		strbuf_release(&buf);
-		strbuf_release(&realbuf);
-		strbuf_release(&prefixbuf);
-	} else if (format == FORMAT_DEFAULT && def == DEFAULT_RELATIVE_IF_SHARED) {
-		struct strbuf buf = STRBUF_INIT;
-		puts(relative_path(path, prefix, &buf));
-		strbuf_release(&buf);
 	} else {
-		struct strbuf buf = STRBUF_INIT;
-		strbuf_realpath_forgiving(&buf, path, 1);
-		puts(buf.buf);
-		strbuf_release(&buf);
+		switch (format) {
+		case FORMAT_RELATIVE:
+			fmt = PATH_FORMAT_RELATIVE;
+			break;
+		case FORMAT_CANONICAL:
+			fmt = PATH_FORMAT_CANONICAL;
+			break;
+		default:
+			fmt = PATH_FORMAT_UNMODIFIED;
+			break;
+		}
 	}
-	free(cwd);
+
+	format_path(&sb, path, prefix, fmt);
+	puts(sb.buf);
+
+	strbuf_release(&sb);
 }
 
 int cmd_rev_parse(int argc,
@@ -708,7 +709,6 @@ int cmd_rev_parse(int argc,
 	struct object_id oid;
 	unsigned int flags = 0;
 	const char *name = NULL;
-	struct object_context unused;
 	struct strbuf buf = STRBUF_INIT;
 	int seen_end_of_options = 0;
 	enum format_type format = FORMAT_DEFAULT;
@@ -733,8 +733,8 @@ int cmd_rev_parse(int argc,
 
 	/* No options; just report on whether we're in a git repo or not. */
 	if (argc == 1) {
-		setup_git_directory();
-		git_config(git_default_config, NULL);
+		setup_git_directory(the_repository);
+		repo_config(the_repository, git_default_config, NULL);
 		return 0;
 	}
 
@@ -743,7 +743,7 @@ int cmd_rev_parse(int argc,
 
 		if (as_is) {
 			if (show_file(arg, output_prefix) && as_is < 2)
-				verify_filename(prefix, arg, 0);
+				verify_filename(the_repository, prefix, arg, 0);
 			continue;
 		}
 
@@ -768,8 +768,8 @@ int cmd_rev_parse(int argc,
 
 		/* The rest of the options require a git repository. */
 		if (!did_repo_setup) {
-			prefix = setup_git_directory();
-			git_config(git_default_config, NULL);
+			prefix = setup_git_directory(the_repository);
+			repo_config(the_repository, git_default_config, NULL);
 			did_repo_setup = 1;
 
 			prepare_repo_settings(the_repository);
@@ -832,7 +832,8 @@ int cmd_rev_parse(int argc,
 				prefix = argv[++i];
 				if (!prefix)
 					die(_("--prefix requires an argument"));
-				startup_info->prefix = prefix;
+				FREE_AND_NULL(the_repository->prefix);
+				the_repository->prefix = xstrdup(prefix);
 				output_prefix = 1;
 				continue;
 			}
@@ -934,14 +935,23 @@ int cmd_rev_parse(int argc,
 				continue;
 			}
 			if (!strcmp(arg, "--bisect")) {
-				refs_for_each_fullref_in(get_main_ref_store(the_repository),
-							 "refs/bisect/bad",
-							 NULL, show_reference,
-							 NULL);
-				refs_for_each_fullref_in(get_main_ref_store(the_repository),
-							 "refs/bisect/good",
-							 NULL, anti_reference,
-							 NULL);
+				char *prefix;
+				char *term_bad = NULL;
+				char *term_good = NULL;
+				struct refs_for_each_ref_options opts = { 0 };
+				read_bisect_terms(&term_bad, &term_good);
+				prefix = xstrfmt("refs/bisect/%s", term_bad);
+				opts.prefix = prefix;
+				refs_for_each_ref_ext(get_main_ref_store(the_repository),
+						      show_reference, NULL, &opts);
+				free(prefix);
+				prefix = xstrfmt("refs/bisect/%s", term_good);
+				opts.prefix = prefix;
+				refs_for_each_ref_ext(get_main_ref_store(the_repository),
+						      anti_reference, NULL, &opts);
+				free(prefix);
+				free(term_good);
+				free(term_bad);
 				continue;
 			}
 			if (opt_with_value(arg, "--branches", &arg)) {
@@ -1001,7 +1011,7 @@ int cmd_rev_parse(int argc,
 			}
 			if (!strcmp(arg, "--show-cdup")) {
 				const char *pfx = prefix;
-				if (!is_inside_work_tree()) {
+				if (!is_inside_work_tree(the_repository)) {
 					const char *work_tree =
 						repo_get_work_tree(the_repository);
 					if (work_tree)
@@ -1058,17 +1068,17 @@ int cmd_rev_parse(int argc,
 				continue;
 			}
 			if (!strcmp(arg, "--is-inside-git-dir")) {
-				printf("%s\n", is_inside_git_dir() ? "true"
+				printf("%s\n", is_inside_git_dir(the_repository) ? "true"
 						: "false");
 				continue;
 			}
 			if (!strcmp(arg, "--is-inside-work-tree")) {
-				printf("%s\n", is_inside_work_tree() ? "true"
+				printf("%s\n", is_inside_work_tree(the_repository) ? "true"
 						: "false");
 				continue;
 			}
 			if (!strcmp(arg, "--is-bare-repository")) {
-				printf("%s\n", is_bare_repository() ? "true"
+				printf("%s\n", is_bare_repository(the_repository) ? "true"
 						: "false");
 				continue;
 			}
@@ -1108,11 +1118,20 @@ int cmd_rev_parse(int argc,
 				const char *val = arg ? arg : "storage";
 
 				if (strcmp(val, "storage") &&
+				    strcmp(val, "compat") &&
 				    strcmp(val, "input") &&
 				    strcmp(val, "output"))
 					die(_("unknown mode for --show-object-format: %s"),
 					    arg);
-				puts(the_hash_algo->name);
+
+				if (!strcmp(val, "compat")) {
+					if (the_repository->compat_hash_algo)
+						puts(the_repository->compat_hash_algo->name);
+					else
+						putchar('\n');
+				} else {
+					puts(the_hash_algo->name);
+				}
 				continue;
 			}
 			if (!strcmp(arg, "--show-ref-format")) {
@@ -1141,9 +1160,8 @@ int cmd_rev_parse(int argc,
 			name++;
 			type = REVERSED;
 		}
-		if (!get_oid_with_context(the_repository, name,
-					  flags, &oid, &unused)) {
-			object_context_release(&unused);
+		if (!repo_get_oid_with_flags(the_repository, name, &oid,
+					     flags)) {
 			if (output_algo)
 				repo_oid_to_algop(the_repository, &oid,
 						  output_algo, &oid);
@@ -1153,7 +1171,6 @@ int cmd_rev_parse(int argc,
 				show_rev(type, &oid, name);
 			continue;
 		}
-		object_context_release(&unused);
 		if (verify)
 			die_no_single_rev(quiet);
 		if (has_dashdash)
@@ -1161,7 +1178,7 @@ int cmd_rev_parse(int argc,
 		as_is = 1;
 		if (!show_file(arg, output_prefix))
 			continue;
-		verify_filename(prefix, arg, 1);
+		verify_filename(the_repository, prefix, arg, 1);
 	}
 	strbuf_release(&buf);
 	if (verify) {

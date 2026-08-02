@@ -107,13 +107,13 @@ test_expect_success setup '
 '
 
 test_expect_success 'correct usage on sub-command -h' '
-	test_expect_code 129 git reflog expire -h >err &&
-	grep "git reflog expire" err
+	git reflog expire -h >err &&
+	test_grep "git reflog expire" err
 '
 
 test_expect_success 'correct usage on "git reflog show -h"' '
-	test_expect_code 129 git reflog show -h >err &&
-	grep -F "git reflog [show]" err
+	git reflog show -h >err &&
+	test_grep -F "git reflog [show]" err
 '
 
 test_expect_success 'pass through -- to sub-command' '
@@ -130,10 +130,10 @@ test_expect_success 'pass through -- to sub-command' '
 
 test_expect_success rewind '
 	test_tick && git reset --hard HEAD~2 &&
-	test -f C &&
-	test -f A/B/E &&
-	! test -f F &&
-	! test -f A/G &&
+	test_path_is_file C &&
+	test_path_is_file A/B/E &&
+	test_path_is_missing F &&
+	test_path_is_missing A/G &&
 
 	check_have A B C D E F G H I J K L &&
 
@@ -244,30 +244,22 @@ test_expect_success 'delete' '
 	test_tick &&
 	git commit -m tiger C &&
 
-	HEAD_entry_count=$(git reflog | wc -l) &&
-	main_entry_count=$(git reflog show main | wc -l) &&
-
-	test $HEAD_entry_count = 5 &&
-	test $main_entry_count = 5 &&
-
+	test_stdout_line_count = 5 git reflog &&
+	test_stdout_line_count = 5 git reflog show main &&
 
 	git reflog delete main@{1} &&
+	test_stdout_line_count = 4 git reflog show main &&
+	test_stdout_line_count = 5 git reflog &&
 	git reflog show main > output &&
-	test_line_count = $(($main_entry_count - 1)) output &&
-	test $HEAD_entry_count = $(git reflog | wc -l) &&
 	! grep ox < output &&
 
-	main_entry_count=$(wc -l < output) &&
-
 	git reflog delete HEAD@{1} &&
-	test $(($HEAD_entry_count -1)) = $(git reflog | wc -l) &&
-	test $main_entry_count = $(git reflog show main | wc -l) &&
-
-	HEAD_entry_count=$(git reflog | wc -l) &&
+	test_stdout_line_count = 4 git reflog &&
+	test_stdout_line_count = 4 git reflog show main &&
 
 	git reflog delete main@{07.04.2005.15:15:00.-0700} &&
+	test_stdout_line_count = 3 git reflog show main &&
 	git reflog show main > output &&
-	test_line_count = $(($main_entry_count - 1)) output &&
 	! grep dragon < output
 
 '
@@ -321,11 +313,11 @@ test_expect_success 'git reflog expire unknown reference' '
 '
 
 test_expect_success 'checkout should not delete log for packed ref' '
-	test $(git reflog main | wc -l) = 4 &&
+	test_stdout_line_count = 4 git reflog main &&
 	git branch foo &&
 	git pack-refs --all &&
 	git checkout foo &&
-	test $(git reflog main | wc -l) = 4
+	test_stdout_line_count = 4 git reflog main
 '
 
 test_expect_success 'stale dirs do not cause d/f conflicts (reflogs on)' '
@@ -671,6 +663,34 @@ test_expect_success 'reflog drop --all with reference' '
 		test_must_fail git reflog drop --all refs/heads/main 2>stderr &&
 		test_grep "usage: references specified along with --all" stderr
 	)
+'
+
+test_expect_success 'expire with pattern config' '
+	# Split refs/heads/ into two roots so we can apply config to each. Make
+	# two branches per root to verify that config is applied correctly
+	# multiple times.
+	git branch root1/branch1 &&
+	git branch root1/branch2 &&
+	git branch root2/branch1 &&
+	git branch root2/branch2 &&
+
+	test_config "gc.reflogexpire" "never" &&
+	test_config "gc.refs/heads/root2/*.reflogExpire" "now" &&
+	git reflog expire \
+		root1/branch1 root1/branch2 \
+		root2/branch1 root2/branch2 &&
+
+	cat >expect <<-\EOF &&
+	root1/branch1@{0}
+	root1/branch2@{0}
+	EOF
+	git log -g --branches="root*" --format=%gD >actual.raw &&
+	# The sole reflog entry of each branch points to the same commit, so
+	# the order in which they are shown is nondeterministic. We just care
+	# about the what was expired (and what was not), so sort to get a known
+	# order.
+	sort <actual.raw >actual.sorted &&
+	test_cmp expect actual.sorted
 '
 
 test_done

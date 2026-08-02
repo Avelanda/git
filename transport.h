@@ -5,6 +5,7 @@
 #include "remote.h"
 #include "list-objects-filter-options.h"
 #include "string-list.h"
+#include "connect.h"
 
 struct git_transport_options {
 	unsigned thin : 1;
@@ -40,19 +41,24 @@ struct git_transport_options {
 
 	/*
 	 * This is only used during fetch. See the documentation of
-	 * negotiation_tips in struct fetch_pack_args.
+	 * these member names in struct fetch_pack_args.
 	 *
-	 * This field is only supported by transports that support connect or
+	 * These fields are only supported by transports that support connect or
 	 * stateless_connect. Set this field directly instead of using
 	 * transport_set_option().
 	 */
-	struct oid_array *negotiation_tips;
+	struct oid_array *negotiation_restrict_tips;
+	struct oid_array *negotiation_include_tips;
 
 	/*
 	 * If allocated, whenever transport_fetch_refs() is called, add known
 	 * common commits to this oidset instead of fetching any packfiles.
 	 */
 	struct oidset *acked_commits;
+
+	struct oid_array *object_info_oids;
+	struct object_info *object_info_data;
+	struct string_list *object_info_options;
 };
 
 enum transport_family {
@@ -308,6 +314,11 @@ const struct git_hash_algo *transport_get_hash_algo(struct transport *transport)
 int transport_fetch_refs(struct transport *transport, struct ref *refs);
 
 /*
+ * Fetch the object info from remote
+ */
+int transport_fetch_object_info(struct transport *transport);
+
+/*
  * If this flag is set, unlocking will avoid to call non-async-signal-safe
  * functions. This will necessarily leave behind some data structures which
  * cannot be cleaned up.
@@ -324,7 +335,8 @@ char *transport_anonymize_url(const char *url);
 void transport_take_over(struct transport *transport,
 			 struct child_process *child);
 
-int transport_connect(struct transport *transport, const char *name,
+int transport_connect(struct transport *transport,
+		      enum git_connect_service service,
 		      const char *exec, int fd[2]);
 
 /* Transport methods defined outside transport.c */

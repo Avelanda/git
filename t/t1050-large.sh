@@ -8,7 +8,7 @@ test_description='adding and checking out large blobs'
 test_expect_success 'core.bigFileThreshold must be non-negative' '
 	: >input &&
 	test_must_fail git -c core.bigFileThreshold=-1 hash-object input >out 2>err &&
-	grep "bad numeric config value" err &&
+	test_grep "bad numeric config value" err &&
 	test_must_be_empty out
 '
 
@@ -104,9 +104,9 @@ test_expect_success 'packsize limit' '
 		# mid1 and mid2 will fit within 256k limit but
 		# appending mid3 will bust the limit and will
 		# result in a separate packfile.
-		test-tool genrandom "a" $(( 66 * 1024 )) >mid1 &&
-		test-tool genrandom "b" $(( 80 * 1024 )) >mid2 &&
-		test-tool genrandom "c" $(( 128 * 1024 )) >mid3 &&
+		test-tool genrandom "a" 66k >mid1 &&
+		test-tool genrandom "b" 80k >mid2 &&
+		test-tool genrandom "c" 128k >mid3 &&
 		git add mid1 mid2 mid3 &&
 
 		count=0 &&
@@ -148,12 +148,12 @@ test_expect_success 'diff --stat' '
 
 test_expect_success 'diff' '
 	git diff HEAD^ HEAD >actual &&
-	grep "Binary files.*differ" actual
+	test_grep "Binary files.*differ" actual
 '
 
 test_expect_success 'diff --cached' '
 	git diff --cached HEAD^ >actual &&
-	grep "Binary files.*differ" actual
+	test_grep "Binary files.*differ" actual
 '
 
 test_expect_success 'hash-object' '

@@ -15,9 +15,9 @@ export GIT_TEST_DEFAULT_REF_FORMAT
 INVALID_OID=$(test_oid 001)
 
 test_expect_success 'pack-refs does not crash with -h' '
-	test_expect_code 129 git pack-refs -h >usage &&
+	git pack-refs -h >usage &&
 	test_grep "[Uu]sage: git pack-refs " usage &&
-	test_expect_code 129 nongit git pack-refs -h >usage &&
+	nongit git pack-refs -h >usage &&
 	test_grep "[Uu]sage: git pack-refs " usage
 '
 
@@ -207,7 +207,7 @@ test_expect_success 'ref transaction: corrupted tables cause failure' '
 		test_commit file1 &&
 		for f in .git/reftable/*.ref
 		do
-			: >"$f" || return 1
+			test-tool truncate "$f" 0 || return 1
 		done &&
 		test_must_fail git update-ref refs/heads/main HEAD
 	)
@@ -776,11 +776,11 @@ test_expect_success 'reflog: can delete separate reflog entries' '
 		test_commit file3 &&
 		test_commit file4 &&
 		git reflog >actual &&
-		grep file3 actual &&
+		test_grep file3 actual &&
 
 		git reflog delete HEAD@{1} &&
 		git reflog >actual &&
-		! grep file3 actual
+		test_grep ! file3 actual
 	)
 '
 
@@ -902,8 +902,8 @@ test_expect_success 'reflog: garbage collection deletes reflog entries' '
 		done &&
 		git reflog refs/heads/main >actual &&
 		test_line_count = 10 actual &&
-		grep "commit (initial): number 1" actual &&
-		grep "commit: number 10" actual &&
+		test_grep "commit (initial): number 1" actual &&
+		test_grep "commit: number 10" actual &&
 
 		git gc &&
 		git reflog refs/heads/main >actual &&
@@ -1133,6 +1133,34 @@ test_expect_success 'fetch: accessing FETCH_HEAD special ref works' '
 	git -C repo fetch ../sub &&
 	git -C repo rev-parse FETCH_HEAD >actual &&
 	test_cmp expect actual
+'
+
+test_expect_success 'writes do not persist peeled value for invalid tags' '
+	test_when_finished rm -rf repo &&
+	git init repo &&
+	(
+		cd repo &&
+		git commit --allow-empty --message initial &&
+
+		# We cannot easily verify that the peeled value is not stored
+		# in the tables. Instead, we test this indirectly: we create
+		# two tags that both point to the same object, but they claim
+		# different object types. If we parse both tags we notice that
+		# the parsed tagged object has a mismatch between the two tags
+		# and bail out.
+		#
+		# If we instead use the persisted peeled value we would not
+		# even parse the tags. As such, we would not notice the
+		# discrepancy either and thus listing these tags would succeed.
+		git tag tag-1 -m "tag 1" &&
+		git cat-file tag tag-1 >raw-tag &&
+		sed "s/^type commit$/type blob/" <raw-tag >broken-tag &&
+		broken_tag_id=$(git hash-object -w -t tag broken-tag) &&
+		git update-ref refs/tags/tag-2 $broken_tag_id &&
+
+		test_must_fail git for-each-ref --format="%(*objectname)" refs/tags/ 2>err &&
+		test_grep "bad tag pointer" err
+	)
 '
 
 test_done

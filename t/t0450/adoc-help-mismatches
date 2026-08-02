@@ -2,7 +2,6 @@ add
 am
 apply
 archive
-bisect
 blame
 branch
 check-ref-format
@@ -13,11 +12,9 @@ column
 credential
 credential-cache
 credential-store
-fast-export
 fast-import
 fetch-pack
 fmt-merge-msg
-for-each-ref
 format-patch
 fsck-objects
 fsmonitor--daemon
@@ -35,7 +32,6 @@ merge
 merge-file
 merge-index
 merge-one-file
-multi-pack-index
 name-rev
 notes
 push

@@ -467,7 +467,7 @@ test_expect_success POSIXPERM 'git reflog expire honors core.sharedRepository' '
 	esac
 '
 
-test_expect_success SYMLINKS 'symref transaction supports symlinks' '
+test_expect_success SYMLINKS,!MINGW 'symref transaction supports symlinks' '
 	test_when_finished "git symbolic-ref -d TEST_SYMREF_HEAD" &&
 	git update-ref refs/heads/new @ &&
 	test_config core.prefersymlinkrefs true &&
@@ -477,9 +477,29 @@ test_expect_success SYMLINKS 'symref transaction supports symlinks' '
 	prepare
 	commit
 	EOF
-	git update-ref --no-deref --stdin <stdin &&
-	test_path_is_symlink .git/TEST_SYMREF_HEAD &&
-	test "$(test_readlink .git/TEST_SYMREF_HEAD)" = refs/heads/new
+	git update-ref --no-deref --stdin <stdin 2>err &&
+	if test_have_prereq WITH_BREAKING_CHANGES
+	then
+		test_path_is_file .git/TEST_SYMREF_HEAD &&
+		echo "ref: refs/heads/new" >expect &&
+		test_cmp expect .git/TEST_SYMREF_HEAD &&
+		test_must_be_empty err
+	else
+		test_path_is_symlink .git/TEST_SYMREF_HEAD &&
+		test "$(test_readlink .git/TEST_SYMREF_HEAD)" = refs/heads/new &&
+		cat >expect <<-EOF &&
+		warning: ${SQ}core.preferSymlinkRefs=true${SQ} is nominated for removal.
+		hint: The use of symbolic links for symbolic refs is deprecated
+		hint: and will be removed in Git 3.0. The configuration that
+		hint: tells Git to use them is thus going away. You can unset
+		hint: it with:
+		hint:
+		hint:	git config unset core.preferSymlinkRefs
+		hint:
+		hint: Git will then use the textual symref format instead.
+		EOF
+		test_cmp expect err
+	fi
 '
 
 test_expect_success 'symref transaction supports false symlink config' '
@@ -497,6 +517,27 @@ test_expect_success 'symref transaction supports false symlink config' '
 	git symbolic-ref TEST_SYMREF_HEAD >actual &&
 	echo refs/heads/new >expect &&
 	test_cmp expect actual
+'
+
+test_expect_success SYMLINKS,!MINGW,!WITH_BREAKING_CHANGES 'core.preferSymlinkRefs can be set up via onbranch condition' '
+	test_when_finished "git symbolic-ref -d TEST_SYMREF_HEAD" &&
+	test_when_finished "rm -f .git/include" &&
+	git update-ref refs/heads/new @ &&
+	cat >.git/include <<-\EOF &&
+	[core]
+		preferSymlinkRefs = true
+	EOF
+	test_config includeIf.onbranch:"$(git branch --show-current)".path \
+		"$(pwd)/.git/include" &&
+	cat >stdin <<-EOF &&
+	start
+	symref-create TEST_SYMREF_HEAD refs/heads/new
+	prepare
+	commit
+	EOF
+	git update-ref --no-deref --stdin <stdin &&
+	test_path_is_symlink .git/TEST_SYMREF_HEAD &&
+	test "$(test_readlink .git/TEST_SYMREF_HEAD)" = refs/heads/new
 '
 
 test_done

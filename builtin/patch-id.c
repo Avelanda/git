@@ -3,6 +3,7 @@
 #include "builtin.h"
 #include "config.h"
 #include "diff.h"
+#include "environment.h"
 #include "gettext.h"
 #include "hash.h"
 #include "hex.h"
@@ -72,7 +73,7 @@ static size_t get_one_patchid(struct object_id *next_oid, struct object_id *resu
 	char pre_oid_str[GIT_MAX_HEXSZ + 1], post_oid_str[GIT_MAX_HEXSZ + 1];
 	struct git_hash_ctx ctx;
 
-	the_hash_algo->init_fn(&ctx);
+	git_hash_init(&ctx, the_hash_algo);
 	oidclr(result, the_repository->hash_algo);
 
 	while (strbuf_getwholeline(line_buf, stdin, '\n') != EOF) {
@@ -172,6 +173,7 @@ static size_t get_one_patchid(struct object_id *next_oid, struct object_id *resu
 		oidclr(next_oid, the_repository->hash_algo);
 
 	flush_one_hunk(result, &ctx);
+	git_hash_discard(&ctx);
 
 	return patchlen;
 }
@@ -227,15 +229,15 @@ int cmd_patch_id(int argc,
 	int opts = 0;
 	struct option builtin_patch_id_options[] = {
 		OPT_CMDMODE(0, "unstable", &opts,
-		    N_("use the unstable patch-id algorithm"), 1),
+		    N_("use the unstable patch ID algorithm"), 1),
 		OPT_CMDMODE(0, "stable", &opts,
-		    N_("use the stable patch-id algorithm"), 2),
+		    N_("use the stable patch ID algorithm"), 2),
 		OPT_CMDMODE(0, "verbatim", &opts,
 			N_("don't strip whitespace from the patch"), 3),
 		OPT_END()
 	};
 
-	git_config(git_patch_id_config, &config);
+	repo_config(the_repository, git_patch_id_config, &config);
 
 	/* verbatim implies stable */
 	if (config.verbatim)

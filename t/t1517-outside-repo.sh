@@ -4,6 +4,13 @@ test_description='check random commands outside repo'
 
 . ./test-lib.sh
 
+test_lazy_prereq SVN '
+	test_have_prereq PERL && test -z "$NO_SVN_TESTS" && perl -w -e "
+		use SVN::Core;
+		use SVN::Repos;
+	"
+'
+
 test_expect_success 'set up a non-repo directory and test file' '
 	GIT_CEILING_DIRECTORIES=$(pwd) &&
 	export GIT_CEILING_DIRECTORIES &&
@@ -93,6 +100,14 @@ test_expect_success 'diff outside repository' '
 	test_cmp expect actual
 '
 
+test_expect_success 'hash object exceeding bigFileThreshold outside repository' '
+	(
+		cd non-repo &&
+		echo foo >foo &&
+		git -c core.bigFileThreshold=1 hash-object --stdin <foo
+	)
+'
+
 test_expect_success 'stripspace outside repository' '
 	nongit git stripspace -s </dev/null
 '
@@ -107,18 +122,56 @@ test_expect_success LIBCURL 'remote-http outside repository' '
 	test_grep "^error: remote-curl" actual
 '
 
-test_expect_success 'update-server-info does not crash with -h' '
-	test_expect_code 129 git update-server-info -h >usage &&
-	test_grep "[Uu]sage: git update-server-info " usage &&
-	test_expect_code 129 nongit git update-server-info -h >usage &&
-	test_grep "[Uu]sage: git update-server-info " usage
-'
+for cmd in $(git --list-cmds=main)
+do
+	cmd=${cmd%.*} # strip .sh, .perl, etc.
+	case "$cmd" in
+	archimport | citool | credential-netrc | credential-libsecret | \
+	credential-osxkeychain | cvsexportcommit | cvsimport | cvsserver | \
+	daemon | \
+	difftool--helper | format-rev | fsck-objects |  get-tar-commit-id | \
+	gui | gui--askpass | \
+	http-backend | http-fetch | http-push | init-db | \
+	mktag | p4 | p4.py | pickaxe | remote-ftp | remote-ftps | \
+	remote-http | remote-https | replay | send-email | \
+	sh-i18n--envsubst | shell | show | stage | \
+	upload-archive--writer | upload-pack | whatchanged)
+		h_expect_outcome=expect_failure
+		all_expect_outcome=expect_failure
+		;;
+	filter-branch | merge-octopus | merge-one-file | merge-resolve | \
+	mergetool | submodule | svn | web--browse)
+		h_expect_outcome=expect_success
+		all_expect_outcome=expect_failure
+		;;
+	*)
+		h_expect_outcome=expect_success
+		all_expect_outcome=expect_success
+		;;
+	esac
+	case "$cmd" in
+	instaweb)
+		prereq=PERL ;;
+	svn)
+		prereq=SVN ;;
+	*)
+		prereq= ;;
+	esac
+	test_$h_expect_outcome $prereq "'git $cmd -h' outside a repository" '
+		nongit git $cmd -h >usage &&
+		test_grep "[Uu]sage: git $cmd " usage
+	'
+	test_$all_expect_outcome $prereq "'git $cmd --help-all' outside a repository" '
+		nongit git $cmd --help-all >usage &&
+		test_grep "[Uu]sage: git $cmd " usage
+	'
+done
 
-test_expect_success 'prune does not crash with -h' '
-	test_expect_code 129 git prune -h >usage &&
-	test_grep "[Uu]sage: git prune " usage &&
-	test_expect_code 129 nongit git prune -h >usage &&
-	test_grep "[Uu]sage: git prune " usage
+test_expect_success 'fmt-merge-msg does not crash with -h' '
+	git fmt-merge-msg -h >usage &&
+	test_grep "[Uu]sage: git fmt-merge-msg " usage &&
+	nongit git fmt-merge-msg -h >usage &&
+	test_grep "[Uu]sage: git fmt-merge-msg " usage
 '
 
 test_done

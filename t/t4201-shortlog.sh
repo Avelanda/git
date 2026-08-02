@@ -105,7 +105,9 @@ test_expect_success 'output from user-defined format is re-wrapped' '
 '
 
 test_expect_success !MINGW,ICONV 'shortlog wrapping' '
-	cat >expect <<\EOF &&
+	# NOTE: do not quote this heredoc, Dash 0.5.13 has a bug with heredocs
+	# that contain multibyte chars.
+	cat >expect <<EOF &&
 A U Thor (5):
       Test
       This is a very, very long first line for the commit message to see if
@@ -265,7 +267,7 @@ test_expect_success 'shortlog --group=<format> DWIM' '
 
 test_expect_success 'shortlog bogus --group' '
 	test_must_fail git shortlog --group=bogus HEAD 2>err &&
-	grep "unknown group type" err
+	test_grep "unknown group type" err
 '
 
 test_expect_success 'trailer idents are split' '

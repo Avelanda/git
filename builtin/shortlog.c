@@ -76,7 +76,7 @@ static void insert_one_record(struct shortlog *log,
 		if (!eol)
 			eol = oneline + strlen(oneline);
 		if (starts_with(oneline, "[PATCH")) {
-			char *eob = strchr(oneline, ']');
+			const char *eob = strchr(oneline, ']');
 			if (eob && (!eol || eob < eol))
 				oneline = eob + 1;
 		}
@@ -357,7 +357,7 @@ void shortlog_init(struct shortlog *log)
 {
 	memset(log, 0, sizeof(*log));
 
-	read_mailmap(&log->mailmap);
+	read_mailmap(the_repository, &log->mailmap);
 
 	log->list.strdup_strings = 1;
 	log->wrap = DEFAULT_WRAPLEN;
@@ -421,7 +421,7 @@ int cmd_shortlog(int argc,
 	if (nongit && !the_hash_algo)
 		repo_set_hash_algo(the_repository, GIT_HASH_DEFAULT);
 
-	git_config(git_default_config, NULL);
+	repo_config(the_repository, git_default_config, NULL);
 	shortlog_init(&log);
 	repo_init_revisions(the_repository, &rev, prefix);
 	parse_options_start(&ctx, argc, argv, prefix, options,
@@ -433,6 +433,8 @@ int cmd_shortlog(int argc,
 		case PARSE_OPT_UNKNOWN:
 			break;
 		case PARSE_OPT_HELP:
+			exit(0);
+		case PARSE_OPT_HELP_ERROR:
 		case PARSE_OPT_ERROR:
 		case PARSE_OPT_SUBCOMMAND:
 			exit(129);

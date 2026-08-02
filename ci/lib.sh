@@ -215,6 +215,7 @@ then
 	test macos != "$CI_OS_NAME" || CI_OS_NAME=osx
 	CI_REPO_SLUG="$GITHUB_REPOSITORY"
 	CI_JOB_ID="$GITHUB_RUN_ID"
+	CI_EVENT="$GITHUB_EVENT_NAME"
 	CC="${CC_PACKAGE:-${CC:-gcc}}"
 	DONT_SKIP_TAGS=t
 	handle_failed_tests () {
@@ -231,9 +232,20 @@ then
 	distro=$(echo "$CI_JOB_IMAGE" | tr : -)
 elif test true = "$GITLAB_CI"
 then
+	# This environment is multiple kB in size and may cause us to exceed
+	# xargs(1) limits on Windows.
+	unset GITLAB_FEATURES
+
 	CI_TYPE=gitlab-ci
 	CI_BRANCH="$CI_COMMIT_REF_NAME"
 	CI_COMMIT="$CI_COMMIT_SHA"
+
+	case "$CI_PIPELINE_SOURCE" in
+	merge_request_event)
+		CI_EVENT=pull_request;;
+	*)
+		CI_EVENT="$CI_PIPELINE_SOURCE";;
+	esac
 
 	case "$OS,$CI_JOB_IMAGE" in
 	Windows_NT,*)
@@ -250,7 +262,7 @@ then
 		CI_OS_NAME=osx
 		JOBS=$(nproc)
 		;;
-	*,alpine:*|*,fedora:*|*,ubuntu:*|*,i386/ubuntu:*)
+	*,almalinux:*|*,alpine:*|*,debian:*|*,fedora:*|*,ubuntu:*|*,i386/ubuntu:*)
 		CI_OS_NAME=linux
 		JOBS=$(nproc)
 		;;
@@ -310,6 +322,17 @@ export DEFAULT_TEST_TARGET=prove
 export GIT_TEST_CLONE_2GB=true
 export SKIP_DASHED_BUILT_INS=YesPlease
 
+# In order to give maximum test coverage to contributor builds,
+# preferrably even before the changes consume public review bandwidth,
+# enable "expensive" tests for PR events.
+# In order to catch bugs introduced at integration time by mismerges,
+# enable the long tests for pushes to the integration branches as well.
+case "$CI_EVENT,$CI_BRANCH" in
+pull_request,*|push,*next*|push,*master*|push,*main*|push,*maint*)
+	export GIT_TEST_LONG=${GIT_TEST_LONG:-true}
+	;;
+esac
+
 case "$distro" in
 ubuntu-*)
 	# Python 2 is end of life, and Ubuntu 23.04 and newer don't actually
@@ -356,6 +379,9 @@ linux-musl-meson)
 	;;
 linux-leaks|linux-reftable-leaks)
 	export SANITIZE=leak
+	export NO_CVS_TESTS=LetsSaveSomeTime
+	export NO_SVN_TESTS=LetsSaveSomeTime
+	export NO_P4_TESTS=LetsSaveSomeTime
 	;;
 linux-asan-ubsan)
 	export SANITIZE=address,undefined
@@ -364,6 +390,9 @@ linux-asan-ubsan)
 	;;
 osx-meson)
 	MESONFLAGS="$MESONFLAGS -Dcredential_helpers=osxkeychain"
+	;;
+windows-*)
+	export NO_RUST=UnfortunatelyYes
 	;;
 esac
 

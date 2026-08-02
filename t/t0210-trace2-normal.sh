@@ -74,8 +74,9 @@ scrub_normal () {
 	#      This line is only emitted when RUNTIME_PREFIX is defined,
 	#      so just omit it for testing purposes.
 	#
-	#   4. 'cmd_ancestry' is not implemented everywhere, so for portability's
-	#      sake, skip it when parsing normal.
+	#   4. 'cmd_ancestry' output depends on how the test is run and
+	#      is not relevant to the features we are testing here.
+	#      Ancestry tests are covered in t0213-trace2-ancestry.sh instead.
 	sed \
 		-e 's/elapsed:[0-9]*\.[0-9][0-9]*\([eE][-+]\{0,1\}[0-9][0-9]*\)\{0,1\}/elapsed:_TIME_/g' \
 		-e "s/^start '[^']*' \(.*\)/start _EXE_ \1/" \
@@ -332,12 +333,12 @@ test_expect_success 'unsafe URLs are redacted by default' '
 
 	GIT_TRACE2="$(pwd)/trace.normal" \
 		git clone https://user:pwd@example.com/ clone &&
-	! grep user:pwd trace.normal &&
+	test_grep ! user:pwd trace.normal &&
 
 	GIT_TRACE2_REDACT=0 GIT_TRACE2="$(pwd)/unredacted.normal" \
 		git clone https://user:pwd@example.com/ clone2 &&
-	grep "start .* clone https://user:pwd@example.com" unredacted.normal &&
-	grep "remote.origin.url=https://user:pwd@example.com" unredacted.normal
+	test_grep "start .* clone https://user:pwd@example.com" unredacted.normal &&
+	test_grep "remote.origin.url=https://user:pwd@example.com" unredacted.normal
 '
 
 test_done

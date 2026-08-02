@@ -97,7 +97,7 @@ test_expect_success POSIXPERM 'run_command reports EACCES' '
 	chmod -x hello.sh &&
 	test_must_fail test-tool run-command run-command ./hello.sh 2>err &&
 
-	grep "fatal: cannot exec.*hello.sh" err
+	test_grep "fatal: cannot exec.*hello.sh" err
 '
 
 test_expect_success POSIXPERM,SANITY 'unreadable directory in PATH' '
@@ -162,6 +162,37 @@ test_expect_success 'run_command runs ungrouped in parallel with more tasks than
 	test-tool run-command --ungroup run-command-parallel 3 sh -c "printf \"%s\n%s\n\" Hello World" >out 2>err &&
 	test_line_count = 8 out &&
 	test_line_count = 4 err
+'
+
+test_expect_success 'run_command listens to stdin' '
+	cat >expect <<-\EOF &&
+	preloaded output of a child
+	listening for stdin:
+	sample stdin 1
+	sample stdin 0
+	preloaded output of a child
+	listening for stdin:
+	sample stdin 1
+	sample stdin 0
+	preloaded output of a child
+	listening for stdin:
+	sample stdin 1
+	sample stdin 0
+	preloaded output of a child
+	listening for stdin:
+	sample stdin 1
+	sample stdin 0
+	EOF
+
+	write_script stdin-script <<-\EOF &&
+	echo "listening for stdin:"
+	while read line
+	do
+		echo "$line"
+	done
+	EOF
+	test-tool run-command run-command-stdin 2 ./stdin-script 2>actual &&
+	test_cmp expect actual
 '
 
 cat >expect <<-EOF
@@ -256,16 +287,8 @@ test_expect_success MINGW 'can spawn .bat with argv[0] containing spaces' '
 	rm -f out &&
 	echo "echo %* >>out" >"$bat" &&
 
-	# Ask git to invoke .bat; clone will fail due to fake SSH helper
-	test_must_fail env GIT_SSH="$bat" git clone myhost:src ssh-clone &&
-
-	# Spawning .bat can fail if there are two quoted cmd.exe arguments.
-	# .bat itself is first (due to spaces in name), so just one more is
-	# needed to verify. GIT_SSH will invoke .bat multiple times:
-	# 1) -G myhost
-	# 2) myhost "git-upload-pack src"
-	# First invocation will always succeed. Test the second one.
-	grep "git-upload-pack" out
+	test-tool run-command run-command "$bat" "arg with spaces" &&
+	test_grep "arg with spaces" out
 '
 
 test_done

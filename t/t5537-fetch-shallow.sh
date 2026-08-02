@@ -244,11 +244,21 @@ test_expect_success '.git/shallow is edited by repack' '
 		origin "+refs/heads/*:refs/remotes/origin/*" &&
 	git -C shallow-client repack -adfl &&
 	test_must_fail git -C shallow-client rev-parse --verify $d^0 &&
-	! grep $d shallow-client/.git/shallow &&
+	test_grep ! $d shallow-client/.git/shallow &&
 
 	git -C shallow-server branch branch-orig $d &&
 	git -C shallow-client fetch --prune --depth=2 \
 		origin "+refs/heads/*:refs/remotes/origin/*"
+'
+
+test_expect_success 'fetch --deepen does not truncate' '
+	git clone --no-local .git full-clone &&
+	git -C full-clone rev-parse --is-shallow-repository >expect &&
+	git -C full-clone log --oneline >>expect &&
+	git -C full-clone fetch --deepen=1 &&
+	git -C full-clone rev-parse --is-shallow-repository >actual &&
+	git -C full-clone log --oneline >>actual &&
+	test_cmp expect actual
 '
 
 . "$TEST_DIRECTORY"/lib-httpd.sh

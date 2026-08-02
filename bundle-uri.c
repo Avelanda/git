@@ -89,7 +89,10 @@ static int summarize_bundle(struct remote_bundle_info *info, void *data)
 {
 	FILE *fp = data;
 	fprintf(fp, "[bundle \"%s\"]\n", info->id);
-	fprintf(fp, "\turi = %s\n", info->uri);
+	if (info->uri)
+		fprintf(fp, "\turi = %s\n", info->uri);
+	else
+		fprintf(fp, "\t# uri = (missing)\n");
 
 	if (info->creationToken)
 		fprintf(fp, "\tcreationToken = %"PRIu64"\n", info->creationToken);
@@ -267,6 +270,19 @@ int bundle_uri_parse_config_format(const char *uri,
 		result = 1;
 	}
 
+	if (!result) {
+		struct hashmap_iter iter;
+		struct remote_bundle_info *bundle;
+
+		hashmap_for_each_entry(&list->bundles, &iter, bundle, ent) {
+			if (!bundle->uri) {
+				error(_("bundle list at '%s': bundle '%s' has no uri"),
+				      uri, bundle->id ? bundle->id : "<unknown>");
+				result = 1;
+			}
+		}
+	}
+
 	return result;
 }
 
@@ -362,7 +378,7 @@ cleanup:
 	if (child_in)
 		fclose(child_in);
 	if (finish_command(&cp))
-		return 1;
+		result = 1;
 	if (child_out)
 		fclose(child_out);
 	return result;
@@ -380,7 +396,7 @@ static int copy_uri_to_file(const char *filename, const char *uri)
 		uri = out;
 
 	/* Copy as a file */
-	return copy_file(filename, uri, 0);
+	return copy_file(the_repository, filename, uri, 0);
 }
 
 static int unbundle_from_file(struct repository *r, const char *file)
@@ -751,6 +767,12 @@ static int fetch_bundle_uri_internal(struct repository *r,
 		return -1;
 	}
 
+	if (!bundle->uri) {
+		error(_("bundle '%s' has no uri"),
+		      bundle->id ? bundle->id : "<unknown>");
+		return -1;
+	}
+
 	if (!bundle->file &&
 	    !(bundle->file = find_temp_filename())) {
 		result = -1;
@@ -924,8 +946,12 @@ static int config_to_packet_line(const char *key, const char *value,
 {
 	struct packet_reader *writer = data;
 
-	if (starts_with(key, "bundle."))
-		packet_write_fmt(writer->fd, "%s=%s", key, value);
+	if (starts_with(key, "bundle.")) {
+		if (value && *value)
+			packet_write_fmt(writer->fd, "%s=%s", key, value);
+		else
+			warning(_("config '%s' has no value"), key);
+	}
 
 	return 0;
 }

@@ -16,13 +16,6 @@ enum fetch_negotiation_setting {
 	FETCH_NEGOTIATION_NOOP,
 };
 
-enum log_refs_config {
-	LOG_REFS_UNSET = -1,
-	LOG_REFS_NONE = 0,
-	LOG_REFS_NORMAL,
-	LOG_REFS_ALWAYS
-};
-
 struct repo_settings {
 	int initialized;
 
@@ -67,6 +60,8 @@ struct repo_settings {
 	size_t packed_git_limit;
 	unsigned long big_file_threshold;
 
+	int max_allowed_tree_depth;
+
 	char *hooks_path;
 };
 #define REPO_SETTINGS_INIT { \
@@ -78,13 +73,12 @@ struct repo_settings {
 	.delta_base_cache_limit = DEFAULT_DELTA_BASE_CACHE_LIMIT, \
 	.packed_git_window_size = DEFAULT_PACKED_GIT_WINDOW_SIZE, \
 	.packed_git_limit = DEFAULT_PACKED_GIT_LIMIT, \
+	.max_allowed_tree_depth = DEFAULT_MAX_ALLOWED_TREE_DEPTH, \
 }
 
 void prepare_repo_settings(struct repository *r);
 void repo_settings_clear(struct repository *r);
 
-/* Read the value for "core.logAllRefUpdates". */
-enum log_refs_config repo_settings_get_log_all_ref_updates(struct repository *repo);
 /* Read the value for "core.warnAmbiguousRefs". */
 int repo_settings_get_warn_ambiguous_refs(struct repository *repo);
 /* Read the value for "core.hooksPath". */

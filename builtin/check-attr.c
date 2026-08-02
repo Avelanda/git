@@ -67,7 +67,7 @@ static void check_attr(const char *prefix, struct attr_check *check,
 
 {
 	char *full_path =
-		prefix_path(prefix, prefix ? strlen(prefix) : 0, file);
+		prefix_path(the_repository, prefix, prefix ? strlen(prefix) : 0, file);
 
 	if (collect_all) {
 		git_all_attrs(the_repository->index, full_path, check);
@@ -116,10 +116,10 @@ int cmd_check_attr(int argc,
 	struct object_id initialized_oid;
 	int cnt, i, doubledash, filei;
 
-	if (!is_bare_repository())
-		setup_work_tree();
+	if (!is_bare_repository(the_repository))
+		setup_work_tree(the_repository);
 
-	git_config(git_default_config, NULL);
+	repo_config(the_repository, git_default_config, NULL);
 
 	argc = parse_options(argc, argv, prefix, check_attr_options,
 			     check_attr_usage, PARSE_OPT_KEEP_DASHDASH);

@@ -43,7 +43,7 @@ static int fsmonitor_hook_version(void)
 {
 	int hook_version;
 
-	if (git_config_get_int("core.fsmonitorhookversion", &hook_version))
+	if (repo_config_get_int(the_repository, "core.fsmonitorhookversion", &hook_version))
 		return -1;
 
 	if (hook_version == HOOK_INTERFACE_VERSION1 ||
@@ -453,7 +453,7 @@ static void fsmonitor_refresh_callback(struct index_state *istate, char *name)
 	 * case-insensitive file system, try again using the name-hash
 	 * and dir-name-hash.
 	 */
-	if (!nr_in_cone && ignore_case) {
+	if (!nr_in_cone && repo_ignore_case(the_repository)) {
 		nr_in_cone = handle_using_name_hash_icase(istate, name);
 		if (!nr_in_cone)
 			nr_in_cone = handle_using_dir_name_hash_icase(

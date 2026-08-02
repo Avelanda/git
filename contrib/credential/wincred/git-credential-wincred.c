@@ -121,10 +121,10 @@ static int match_part_last(LPCWSTR *ptarget, LPCWSTR want, LPCWSTR delim)
 
 static int match_cred_password(const CREDENTIALW *cred) {
 	int ret;
-	WCHAR *cred_password = xmalloc(cred->CredentialBlobSize);
-	wcsncpy_s(cred_password, cred->CredentialBlobSize,
-		(LPCWSTR)cred->CredentialBlob,
-		cred->CredentialBlobSize / sizeof(WCHAR));
+	size_t wlen = cred->CredentialBlobSize / sizeof(WCHAR);
+	WCHAR *cred_password = xmalloc((wlen + 1) * sizeof(WCHAR));
+	wcsncpy_s(cred_password, wlen + 1,
+		(LPCWSTR)cred->CredentialBlob, wlen);
 	ret = !wcscmp(cred_password, password);
 	free(cred_password);
 	return ret;
@@ -165,7 +165,7 @@ static void get_credential(void)
 			write_item("username", creds[i]->UserName,
 				creds[i]->UserName ? wcslen(creds[i]->UserName) : 0);
 			if (creds[i]->CredentialBlobSize > 0) {
-				secret = xmalloc(creds[i]->CredentialBlobSize);
+				secret = xmalloc(creds[i]->CredentialBlobSize + sizeof(WCHAR));
 				wcsncpy_s(secret, creds[i]->CredentialBlobSize, (LPCWSTR)creds[i]->CredentialBlob, creds[i]->CredentialBlobSize / sizeof(WCHAR));
 				line = wcstok_s(secret, L"\r\n", &remaining_lines);
 				write_item("password", line, line ? wcslen(line) : 0);
@@ -208,8 +208,8 @@ static void store_credential(void)
 
 	if (oauth_refresh_token) {
 		wlen = _scwprintf(L"%s\r\noauth_refresh_token=%s", password, oauth_refresh_token);
-		secret = xmalloc(sizeof(WCHAR) * wlen);
-		_snwprintf_s(secret, sizeof(WCHAR) * wlen, wlen, L"%s\r\noauth_refresh_token=%s", password, oauth_refresh_token);
+		secret = xmalloc((wlen + 1) * sizeof(WCHAR));
+		_snwprintf_s(secret, wlen + 1, wlen, L"%s\r\noauth_refresh_token=%s", password, oauth_refresh_token);
 	} else {
 		secret = _wcsdup(password);
 	}

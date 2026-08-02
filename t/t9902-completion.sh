@@ -11,9 +11,9 @@ test_description='test bash completion'
 # untraceable with such ancient Bash versions.
 test_untraceable=UnfortunatelyYes
 
-# Override environment and always use master for the default initial branch
+# Override environment and always use main for the default initial branch
 # name for these tests, so that rev completion candidates are as expected.
-GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=master
+GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=main
 export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
 
 . ./lib-bash.sh
@@ -590,12 +590,10 @@ test_expect_success '__gitcomp - doesnt fail because of invalid variable name' '
 	__gitcomp "$invalid_variable_name"
 '
 
-read -r -d "" refs <<-\EOF
-main
+refs='main
 maint
 next
-seen
-EOF
+seen'
 
 test_expect_success '__gitcomp_nl - trailing space' '
 	test_gitcomp_nl "m" "$refs" <<-EOF
@@ -1383,7 +1381,7 @@ test_expect_success '__git_complete_worktree_paths' '
 	test_when_finished "git worktree remove other_wt" &&
 	git worktree add --orphan other_wt &&
 	run_completion "git worktree remove " &&
-	grep other_wt out
+	test_grep other_wt out
 '
 
 test_expect_success '__git_complete_worktree_paths - not a git repository' '
@@ -1399,7 +1397,7 @@ test_expect_success '__git_complete_worktree_paths with -C' '
 	test_when_finished "git -C otherrepo worktree remove otherrepo_wt" &&
 	git -C otherrepo worktree add --orphan otherrepo_wt &&
 	run_completion "git -C otherrepo worktree remove " &&
-	grep otherrepo_wt out
+	test_grep otherrepo_wt out
 '
 
 test_expect_success 'git switch - with no options, complete local branches and unique remote branch names for DWIM logic' '
@@ -1453,7 +1451,7 @@ test_expect_success 'git bisect - start subcommand arguments before double-dash 
 		HEAD Z
 		final Z
 		initial Z
-		master Z
+		main Z
 		EOF
 	)
 '
@@ -2446,7 +2444,7 @@ test_expect_success FUNNYNAMES \
 	>repeated-quoted/2-file &&
 	>repeated-quoted/3\"file &&   # ... and here, too.
 
-	# Still, we shold only list the directory name only once.
+	# Still, we should list the directory name only once.
 	test_path_completion repeated repeated-quoted
 '
 
@@ -2556,14 +2554,14 @@ test_expect_success '__git_pretty_aliases' '
 test_expect_success 'basic' '
 	run_completion "git " &&
 	# built-in
-	grep -q "^add \$" out &&
+	test_grep -q "^add \$" out &&
 	# script
-	grep -q "^rebase \$" out &&
+	test_grep -q "^rebase \$" out &&
 	# plumbing
-	! grep -q "^ls-files \$" out &&
+	test_grep ! -q "^ls-files \$" out &&
 
 	run_completion "git r" &&
-	! grep -q -v "^r" out
+	test_grep ! -q -v "^r" out
 '
 
 test_expect_success 'double dash "git" itself' '
@@ -2596,9 +2594,12 @@ test_expect_success 'double dash "git checkout"' '
 	--merge Z
 	--conflict=Z
 	--patch Z
+	--unified=Z
+	--inter-hunk-context=Z
 	--ignore-skip-worktree-bits Z
 	--ignore-other-worktrees Z
 	--recurse-submodules Z
+	--auto-advance Z
 	--progress Z
 	--guess Z
 	--no-guess Z
@@ -2655,7 +2656,7 @@ test_expect_success 'git --help completion' '
 test_expect_success 'completion.commands removes multiple commands' '
 	test_config completion.commands "-cherry -mergetool" &&
 	git --list-cmds=list-mainporcelain,list-complete,config >out &&
-	! grep -E "^(cherry|mergetool)$" out
+	test_grep ! -E "^(cherry|mergetool)$" out
 '
 
 test_expect_success 'setup for integration tests' '
@@ -3051,6 +3052,7 @@ test_expect_success 'git config set - variable name - __git_compute_second_level
 	submodule.sub.fetchRecurseSubmodules Z
 	submodule.sub.ignore Z
 	submodule.sub.active Z
+	submodule.sub.gitdir Z
 	EOF
 '
 
@@ -3177,8 +3179,8 @@ test_expect_success 'plumbing commands are excluded without GIT_COMPLETION_SHOW_
 
 		# Just mainporcelain, not plumbing commands
 		run_completion "git c" &&
-		grep checkout out &&
-		! grep cat-file out
+		test_grep checkout out &&
+		test_grep ! cat-file out
 	)
 '
 
@@ -3191,13 +3193,13 @@ test_expect_success 'all commands are shown with GIT_COMPLETION_SHOW_ALL_COMMAND
 
 		# Both mainporcelain and plumbing commands
 		run_completion "git c" &&
-		grep checkout out &&
-		grep cat-file out &&
+		test_grep checkout out &&
+		test_grep cat-file out &&
 
 		# Check "gitk", a "main" command, but not a built-in + more plumbing
 		run_completion "git g" &&
-		grep gitk out &&
-		grep get-tar-commit-id out
+		test_grep gitk out &&
+		test_grep get-tar-commit-id out
 	)
 '
 

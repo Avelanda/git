@@ -2,6 +2,7 @@
 #include "builtin.h"
 #include "config.h"
 #include "commit.h"
+#include "environment.h"
 #include "gettext.h"
 #include "hex.h"
 #include "object-name.h"
@@ -10,11 +11,13 @@
 
 static int show_merge_base(struct commit **rev, size_t rev_nr, int show_all)
 {
+	enum merge_base_flags flags = show_all ? MERGE_BASE_FIND_ALL : 0;
 	struct commit_list *result = NULL, *r;
 
 	if (repo_get_merge_bases_many_dirty(the_repository, rev[0],
-					    rev_nr - 1, rev + 1, &result) < 0) {
-		free_commit_list(result);
+					    rev_nr - 1, rev + 1,
+					    flags, &result) < 0) {
+		commit_list_free(result);
 		return -1;
 	}
 
@@ -27,7 +30,7 @@ static int show_merge_base(struct commit **rev, size_t rev_nr, int show_all)
 			break;
 	}
 
-	free_commit_list(result);
+	commit_list_free(result);
 	return 0;
 }
 
@@ -70,7 +73,7 @@ static int handle_independent(int count, const char **args)
 	for (rev = revs; rev; rev = rev->next)
 		printf("%s\n", oid_to_hex(&rev->item->object.oid));
 
-	free_commit_list(revs);
+	commit_list_free(revs);
 	return 0;
 }
 
@@ -84,11 +87,11 @@ static int handle_octopus(int count, const char **args, int show_all)
 		commit_list_insert(get_commit_reference(args[i]), &revs);
 
 	if (get_octopus_merge_bases(revs, &result) < 0) {
-		free_commit_list(revs);
-		free_commit_list(result);
+		commit_list_free(revs);
+		commit_list_free(result);
 		return 128;
 	}
-	free_commit_list(revs);
+	commit_list_free(revs);
 	reduce_heads_replace(&result);
 
 	if (!result)
@@ -100,7 +103,7 @@ static int handle_octopus(int count, const char **args, int show_all)
 			break;
 	}
 
-	free_commit_list(result);
+	commit_list_free(result);
 	return 0;
 }
 
@@ -167,7 +170,7 @@ int cmd_merge_base(int argc,
 		OPT_END()
 	};
 
-	git_config(git_default_config, NULL);
+	repo_config(the_repository, git_default_config, NULL);
 	argc = parse_options(argc, argv, prefix, options, merge_base_usage, 0);
 
 	if (cmdmode == 'a') {

@@ -25,30 +25,22 @@ void chdir_notify_register(const char *name,
 	list_add_tail(&e->list, &chdir_notify_entries);
 }
 
-static void reparent_cb(const char *name,
-			const char *old_cwd,
-			const char *new_cwd,
-			void *data)
+void chdir_notify_unregister(const char *name, chdir_notify_callback cb,
+			     void *data)
 {
-	char **path = data;
-	char *tmp = *path;
+	struct list_head *pos, *p;
 
-	if (!tmp)
-		return;
+	list_for_each_safe(pos, p, &chdir_notify_entries) {
+		struct chdir_notify_entry *e =
+			list_entry(pos, struct chdir_notify_entry, list);
 
-	*path = reparent_relative_path(old_cwd, new_cwd, tmp);
-	free(tmp);
+		if (e->cb != cb || e->data != data || !e->name != !name ||
+		    (e->name && strcmp(e->name, name)))
+			continue;
 
-	if (name) {
-		trace_printf_key(&trace_setup_key,
-				 "setup: reparent %s to '%s'",
-				 name, *path);
+		list_del(pos);
+		free(e);
 	}
-}
-
-void chdir_notify_reparent(const char *name, char **path)
-{
-	chdir_notify_register(name, reparent_cb, path);
 }
 
 int chdir_notify(const char *new_cwd)

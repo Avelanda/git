@@ -154,11 +154,34 @@ test_expect_success 'git log with multiple literal paths uses Bloom filter' '
 	test_bloom_filters_used "-- file*"
 '
 
-test_expect_success 'git log with path contains a wildcard does not use Bloom filter' '
+test_expect_success 'git log with paths all contain non-wildcard part uses Bloom filter' '
+	test_bloom_filters_used "-- A/\* file4" &&
+	test_bloom_filters_used "-- A/file\*" &&
+	test_bloom_filters_used "-- * A/\*"
+'
+
+test_expect_success 'git log with path only contains wildcard part does not use Bloom filter' '
 	test_bloom_filters_not_used "-- file\*" &&
-	test_bloom_filters_not_used "-- A/\* file4" &&
-	test_bloom_filters_not_used "-- file4 A/\*" &&
-	test_bloom_filters_not_used "-- * A/\*"
+	test_bloom_filters_not_used "-- file\* A/\*" &&
+	test_bloom_filters_not_used "-- file\* *" &&
+	test_bloom_filters_not_used "-- \*"
+'
+
+test_expect_success 'git log with path contains various magic signatures' '
+	cd A &&
+	test_bloom_filters_used "-- \:\(top\)B" &&
+	cd .. &&
+
+	test_bloom_filters_used "-- \:\(glob\)A/\*\*/C" &&
+	test_bloom_filters_not_used "-- \:\(icase\)FILE4" &&
+	test_bloom_filters_not_used "-- \:\(exclude\)A/B/C" &&
+
+	test_when_finished "rm -f .gitattributes" &&
+	cat >.gitattributes <<-EOF &&
+	A/file1 text
+	A/B/file2 -text
+	EOF
+	test_bloom_filters_used "-- \:\(attr\:text\)A"
 '
 
 test_expect_success 'setup - add commit-graph to the chain without Bloom filters' '
@@ -201,10 +224,10 @@ test_expect_success 'persist filter settings' '
 		GIT_TEST_BLOOM_SETTINGS_NUM_HASHES=9 \
 		GIT_TEST_BLOOM_SETTINGS_BITS_PER_ENTRY=15 \
 		git commit-graph write --reachable --changed-paths &&
-	grep "{\"hash_version\":1,\"num_hashes\":9,\"bits_per_entry\":15,\"max_changed_paths\":512" trace2.txt &&
+	test_grep "{\"hash_version\":1,\"num_hashes\":9,\"bits_per_entry\":15,\"max_changed_paths\":512" trace2.txt &&
 	GIT_TRACE2_EVENT="$(pwd)/trace2-auto.txt" \
 		git commit-graph write --reachable --changed-paths &&
-	grep "{\"hash_version\":1,\"num_hashes\":9,\"bits_per_entry\":15,\"max_changed_paths\":512" trace2-auto.txt
+	test_grep "{\"hash_version\":1,\"num_hashes\":9,\"bits_per_entry\":15,\"max_changed_paths\":512" trace2-auto.txt
 '
 
 test_max_changed_paths () {
@@ -471,7 +494,7 @@ test_expect_success 'ensure Bloom filters with incompatible settings are ignored
 		>expect 2>err &&
 	git -C $repo log --oneline --no-decorate -- file >actual 2>err &&
 	test_cmp expect actual &&
-	grep "disabling Bloom filters for commit-graph layer .$layer." err
+	test_grep "disabling Bloom filters for commit-graph layer .$layer." err
 '
 
 test_expect_success 'merge graph layers with incompatible Bloom settings' '
@@ -480,8 +503,8 @@ test_expect_success 'merge graph layers with incompatible Bloom settings' '
 	>trace2.txt &&
 	GIT_TRACE2_EVENT="$(pwd)/trace2.txt" \
 		git -C $repo commit-graph write --reachable --changed-paths 2>err &&
-	grep "disabling Bloom filters for commit-graph layer .$layer." err &&
-	grep "{\"hash_version\":1,\"num_hashes\":7,\"bits_per_entry\":10,\"max_changed_paths\":512" trace2.txt &&
+	test_grep "disabling Bloom filters for commit-graph layer .$layer." err &&
+	test_grep "{\"hash_version\":1,\"num_hashes\":7,\"bits_per_entry\":10,\"max_changed_paths\":512" trace2.txt &&
 
 	test_path_is_file $repo/$graph &&
 	test_dir_is_empty $repo/$graphdir &&
@@ -493,7 +516,7 @@ test_expect_success 'merge graph layers with incompatible Bloom settings' '
 		git -C $repo log --oneline --no-decorate -- file >actual 2>err &&
 
 	test_cmp expect actual &&
-	grep "statistics:{\"filter_not_present\":0," trace.perf &&
+	test_grep "statistics:{\"filter_not_present\":0," trace.perf &&
 	test_must_be_empty err
 '
 
@@ -531,8 +554,8 @@ test_expect_success 'ensure Bloom filter with incompatible versions are ignored'
 	>trace2.txt &&
 	GIT_TRACE2_EVENT="$(pwd)/trace2.txt" \
 		git -C $repo -c commitGraph.changedPathsVersion=2 commit-graph write --reachable --changed-paths 2>err &&
-	grep "disabling Bloom filters for commit-graph layer .$layer." err &&
-	grep "{\"hash_version\":2,\"num_hashes\":7,\"bits_per_entry\":10,\"max_changed_paths\":512" trace2.txt
+	test_grep "disabling Bloom filters for commit-graph layer .$layer." err &&
+	test_grep "{\"hash_version\":2,\"num_hashes\":7,\"bits_per_entry\":10,\"max_changed_paths\":512" trace2.txt
 '
 
 get_first_changed_path_filter () {
@@ -544,27 +567,6 @@ test_expect_success 'set up repo with high bit path, version 1 changed-path' '
 	git init highbit1 &&
 	test_commit -C highbit1 c1 "$CENT" &&
 	git -C highbit1 commit-graph write --reachable --changed-paths
-'
-
-test_expect_success 'setup check value of version 1 changed-path' '
-	(
-		cd highbit1 &&
-		echo "52a9" >expect &&
-		get_first_changed_path_filter >actual
-	)
-'
-
-# expect will not match actual if char is unsigned by default. Write the test
-# in this way, so that a user running this test script can still see if the two
-# files match. (It will appear as an ordinary success if they match, and a skip
-# if not.)
-if test_cmp highbit1/expect highbit1/actual
-then
-	test_set_prereq SIGNED_CHAR_BY_DEFAULT
-fi
-test_expect_success SIGNED_CHAR_BY_DEFAULT 'check value of version 1 changed-path' '
-	# Only the prereq matters for this test.
-	true
 '
 
 test_expect_success 'setup make another commit' '
@@ -753,7 +755,7 @@ test_expect_success PERL_TEST_HELPERS 'Bloom reader notices too-small data chunk
 test_expect_success PERL_TEST_HELPERS 'Bloom reader notices out-of-bounds filter offsets' '
 	check_corrupt_graph BIDX 12 FFFFFFFF &&
 	# use grep to avoid depending on exact chunk size
-	grep "warning: ignoring out-of-range offset (4294967295) for changed-path filter at pos 3 of .git/objects/info/commit-graph" err
+	test_grep "warning: ignoring out-of-range offset (4294967295) for changed-path filter at pos 3 of .git/objects/info/commit-graph" err
 '
 
 test_expect_success PERL_TEST_HELPERS 'Bloom reader notices too-small index chunk' '

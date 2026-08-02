@@ -100,6 +100,9 @@ void prepare_repo_settings(struct repository *r)
 	 */
 	if (!repo_config_get_int(r, "index.version", &value))
 		r->settings.index_version = value;
+	repo_cfg_int(r, "core.maxtreedepth",
+		     &r->settings.max_allowed_tree_depth,
+		     DEFAULT_MAX_ALLOWED_TREE_DEPTH);
 
 	if (!repo_config_get_string_tmp(r, "core.untrackedcache", &strval)) {
 		int v = git_parse_maybe_bool(strval);
@@ -172,22 +175,6 @@ unsigned long repo_settings_get_big_file_threshold(struct repository *repo)
 void repo_settings_set_big_file_threshold(struct repository *repo, unsigned long value)
 {
 	repo->settings.big_file_threshold = value;
-}
-
-enum log_refs_config repo_settings_get_log_all_ref_updates(struct repository *repo)
-{
-	const char *value;
-
-	if (!repo_config_get_string_tmp(repo, "core.logallrefupdates", &value)) {
-		if (value && !strcasecmp(value, "always"))
-			return LOG_REFS_ALWAYS;
-		else if (git_config_bool("core.logallrefupdates", value))
-			return LOG_REFS_NORMAL;
-		else
-			return LOG_REFS_NONE;
-	}
-
-	return LOG_REFS_UNSET;
 }
 
 int repo_settings_get_warn_ambiguous_refs(struct repository *repo)

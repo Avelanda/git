@@ -2,6 +2,7 @@
 
 #include "git-compat-util.h"
 #include "config.h"
+#include "environment.h"
 #include "gettext.h"
 #include "hex.h"
 #include "http.h"
@@ -108,7 +109,7 @@ int cmd_main(int argc, const char **argv)
 	struct strvec index_pack_args = STRVEC_INIT;
 	int ret;
 
-	setup_git_directory_gently(&nongit);
+	setup_git_directory_gently(the_repository, &nongit);
 
 	while (arg < argc && argv[arg][0] == '-') {
 		const char *p;
@@ -150,7 +151,7 @@ int cmd_main(int argc, const char **argv)
 
 	trace2_cmd_name("http-fetch");
 
-	git_config(git_default_config, NULL);
+	repo_config(the_repository, git_default_config, NULL);
 
 	if (packfile) {
 		if (!index_pack_args.nr)

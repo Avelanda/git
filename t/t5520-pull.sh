@@ -356,8 +356,8 @@ test_expect_success '--rebase with rebase.autostash succeeds on ff' '
 	echo "dirty" >>dst/file &&
 	test_config -C dst rebase.autostash true &&
 	git -C dst pull --rebase >actual 2>&1 &&
-	grep -q "Fast-forward" actual &&
-	grep -q "Applied autostash." actual
+	test_grep -q "Fast-forward" actual &&
+	test_grep -q "Applied autostash." actual
 '
 
 test_expect_success '--rebase with conflicts shows advice' '
@@ -470,6 +470,66 @@ test_expect_success 'pull --no-autostash & merge.autostash=false' '
 test_expect_success 'pull --no-autostash & merge.autostash unset' '
 	test_unconfig merge.autostash &&
 	test_pull_autostash_fail --no-autostash --no-rebase
+'
+
+test_expect_success 'pull succeeds with dirty working directory and pull.autostash=true' '
+	test_config pull.autostash true &&
+	test_pull_autostash 1 --rebase &&
+	test_pull_autostash 2 --no-rebase &&
+	test_pull_autostash 1 --autostash --rebase &&
+	test_pull_autostash 2 --autostash --no-rebase
+'
+
+test_expect_success 'pull fails with dirty working directory and pull.autostash=false' '
+	test_config pull.autostash false &&
+	test_pull_autostash_fail --rebase &&
+	test_pull_autostash_fail --no-rebase &&
+	test_pull_autostash_fail --no-autostash --rebase &&
+	test_pull_autostash_fail --no-autostash --no-rebase
+'
+
+test_expect_success 'pull --autostash overrides pull.autostash=false' '
+	test_config pull.autostash false &&
+	test_pull_autostash 1 --autostash --rebase &&
+	test_pull_autostash 2 --autostash --no-rebase
+'
+
+test_expect_success 'pull --no-autostash overrides pull.autostash=true' '
+	test_config pull.autostash true &&
+	test_pull_autostash_fail --no-autostash --rebase &&
+	test_pull_autostash_fail --no-autostash --no-rebase
+'
+
+test_expect_success 'pull.autostash=true overrides rebase.autostash' '
+	test_config pull.autostash true &&
+	test_config rebase.autostash true &&
+	test_pull_autostash 1 --rebase &&
+	test_config rebase.autostash false &&
+	test_pull_autostash 1 --rebase
+'
+
+test_expect_success 'pull.autostash=false overrides rebase.autostash' '
+	test_config pull.autostash false &&
+	test_config rebase.autostash true &&
+	test_pull_autostash_fail --rebase &&
+	test_config rebase.autostash false &&
+	test_pull_autostash_fail --rebase
+'
+
+test_expect_success 'pull.autostash=true overrides merge.autostash' '
+	test_config pull.autostash true &&
+	test_config merge.autostash true &&
+	test_pull_autostash 2 --no-rebase &&
+	test_config merge.autostash false &&
+	test_pull_autostash 2 --no-rebase
+'
+
+test_expect_success 'pull.autostash=false overrides merge.autostash' '
+	test_config pull.autostash false &&
+	test_config merge.autostash true &&
+	test_pull_autostash_fail --no-rebase &&
+	test_config merge.autostash false &&
+	test_pull_autostash_fail --no-rebase
 '
 
 test_expect_success 'pull.rebase' '

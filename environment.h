@@ -2,6 +2,7 @@
 #define ENVIRONMENT_H
 
 #include "repo-settings.h"
+#include "branch.h"
 
 /* Double-check local_repo_env below if you add to this list. */
 #define GIT_DIR_ENVIRONMENT "GIT_DIR"
@@ -42,6 +43,7 @@
 #define GIT_OPTIONAL_LOCKS_ENVIRONMENT "GIT_OPTIONAL_LOCKS"
 #define GIT_TEXT_DOMAIN_DIR_ENVIRONMENT "GIT_TEXTDOMAINDIR"
 #define GIT_ATTR_SOURCE_ENVIRONMENT "GIT_ATTR_SOURCE"
+#define GIT_REFERENCE_BACKEND_ENVIRONMENT "GIT_REFERENCE_BACKEND"
 
 /*
  * Environment variable used to propagate the --no-advice global option to the
@@ -84,6 +86,69 @@ extern const char * const local_repo_env[];
 
 struct strvec;
 
+struct repository;
+
+/*
+ * NEEDSWORK: It would be better if these definitions could be moved to
+ * other more specific files, but care is needed to avoid circular
+ * inclusion issues.
+ */
+enum push_default_type {
+	PUSH_DEFAULT_NOTHING = 0,
+	PUSH_DEFAULT_MATCHING,
+	PUSH_DEFAULT_SIMPLE,
+	PUSH_DEFAULT_UPSTREAM,
+	PUSH_DEFAULT_CURRENT,
+	PUSH_DEFAULT_UNSPECIFIED
+};
+
+enum rebase_setup_type {
+	AUTOREBASE_NEVER = 0,
+	AUTOREBASE_LOCAL,
+	AUTOREBASE_REMOTE,
+	AUTOREBASE_ALWAYS
+};
+
+enum object_creation_mode {
+	OBJECT_CREATION_USES_HARDLINKS = 0,
+	OBJECT_CREATION_USES_RENAMES = 1
+};
+
+struct repo_config_values {
+	/* section "core" config values */
+	char *attributes_file;
+	char *excludes_file;
+	char *editor_program;
+	char *pager_program;
+	char *askpass_program;
+	char *apply_default_whitespace;
+	char *apply_default_ignorewhitespace;
+	enum push_default_type push_default;
+	enum rebase_setup_type autorebase;
+	enum object_creation_mode object_creation_mode;
+	int apply_sparse_checkout;
+	int trust_ctime;
+	int check_stat;
+	int zlib_compression_level;
+	int pack_compression_level;
+	int precomposed_unicode;
+	int core_sparse_checkout_cone;
+	int warn_on_object_refname_ambiguity;
+	int protect_hfs;
+	int protect_ntfs;
+	int ignore_case;
+	int trust_executable_bit;
+	int has_symlinks;
+
+	/* section "sparse" config values */
+	int sparse_expect_files_outside_of_patterns;
+
+	/* section "branch" config values */
+	enum branch_track branch_track;
+};
+
+struct repo_config_values *repo_config_values(struct repository *repo);
+
 /*
  * Wrapper of getenv() that returns a strdup value. This value is kept
  * in argv to be freed later.
@@ -104,17 +169,49 @@ int use_optional_locks(void);
 const char *get_git_namespace(void);
 const char *strip_namespace(const char *namespaced_ref);
 
+int git_default_config(const char *, const char *,
+		       const struct config_context *, void *);
+int git_default_core_config(const char *var, const char *value,
+			    const struct config_context *ctx, void *cb);
+
+/*
+ * Getters for the `protect_hfs` and `protect_ntfs` fields of `struct repo_config_values`.
+ * They check `repo->initialized` to prevent calling `repo_config_values()`
+ * before the repository setup is fully complete or in non-git environments.
+ */
+int repo_protect_hfs(struct repository *repo);
+int repo_protect_ntfs(struct repository *repo);
+
+/*
+ * Getter for the `ignore_case` field of `struct repo_config_values`.
+ * It checks `repo->initialized` to prevent calling repo_config_values()`
+ * before the repository setup is fully complete or in non-git environments.
+ */
+int repo_ignore_case(struct repository *repo);
+
+int repo_trust_executable_bit(struct repository *repo);
+
+int repo_has_symlinks(struct repository *repo);
+
+const char *repo_excludes_file(struct repository *repo);
+
+void repo_config_values_init(struct repo_config_values *cfg);
+
+int is_bare_repository(struct repository *repo);
+
+/*
+ * Frees memory allocated for dynamically loaded configuration values
+ * inside `repo_config_values`.
+ *
+ * As dynamically allocated variables are migrated into this struct,
+ * their FREE_AND_NULL() calls should be appended here.
+ */
+void repo_config_values_clear(struct repo_config_values *cfg);
+
 /*
  * TODO: All the below state either explicitly or implicitly relies on
  * `the_repository`. We should eventually get rid of these and make the
  * dependency on a repository explicit:
- *
- *   - `setup_git_env()` ideally shouldn't exist as it modifies global state,
- *     namely the environment. The current process shouldn't ever access that
- *     state via envvars though, but should instead consult a `struct
- *     repository`. When spawning new processes, we would ideally also pass a
- *     `struct repository` and then set up the environment variables for the
- *     child process, only.
  *
  *   - `have_git_dir()` should not have to exist at all. Instead, we should
  *     decide on whether or not we have a `struct repository`.
@@ -126,7 +223,6 @@ const char *strip_namespace(const char *namespaced_ref);
  * Please do not add new global config variables here.
  */
 # ifdef USE_THE_REPOSITORY_VARIABLE
-void setup_git_env(const char *git_dir);
 
 /*
  * Returns true iff we have a configured git repository (either via
@@ -134,58 +230,10 @@ void setup_git_env(const char *git_dir);
  */
 int have_git_dir(void);
 
-extern int is_bare_repository_cfg;
-int is_bare_repository(void);
-extern char *git_work_tree_cfg;
-
 /* Environment bits from configuration mechanism */
-extern int trust_executable_bit;
-extern int trust_ctime;
-extern int check_stat;
-extern int has_symlinks;
 extern int minimum_abbrev, default_abbrev;
-extern int ignore_case;
 extern int assume_unchanged;
-extern int warn_on_object_refname_ambiguity;
-extern char *apply_default_whitespace;
-extern char *apply_default_ignorewhitespace;
-extern char *git_attributes_file;
-extern int zlib_compression_level;
-extern int pack_compression_level;
 extern unsigned long pack_size_limit_cfg;
-extern int max_allowed_tree_depth;
-
-extern int precomposed_unicode;
-extern int protect_hfs;
-extern int protect_ntfs;
-
-extern int core_apply_sparse_checkout;
-extern int core_sparse_checkout_cone;
-extern int sparse_expect_files_outside_of_patterns;
-
-enum rebase_setup_type {
-	AUTOREBASE_NEVER = 0,
-	AUTOREBASE_LOCAL,
-	AUTOREBASE_REMOTE,
-	AUTOREBASE_ALWAYS
-};
-extern enum rebase_setup_type autorebase;
-
-enum push_default_type {
-	PUSH_DEFAULT_NOTHING = 0,
-	PUSH_DEFAULT_MATCHING,
-	PUSH_DEFAULT_SIMPLE,
-	PUSH_DEFAULT_UPSTREAM,
-	PUSH_DEFAULT_CURRENT,
-	PUSH_DEFAULT_UNSPECIFIED
-};
-extern enum push_default_type push_default;
-
-enum object_creation_mode {
-	OBJECT_CREATION_USES_HARDLINKS = 0,
-	OBJECT_CREATION_USES_RENAMES = 1
-};
-extern enum object_creation_mode object_creation_mode;
 
 extern int grafts_keep_true_parents;
 
@@ -195,17 +243,16 @@ const char *get_commit_output_encoding(void);
 extern char *git_commit_encoding;
 extern char *git_log_output_encoding;
 
-extern char *editor_program;
-extern char *askpass_program;
-extern char *excludes_file;
-
 /*
  * The character that begins a commented line in user-editable file
  * that is subject to stripspace.
  */
 extern const char *comment_line_str;
 extern char *comment_line_str_to_free;
+#ifndef WITH_BREAKING_CHANGES
 extern int auto_comment_line_char;
+extern bool warn_on_auto_comment_char;
+#endif /* !WITH_BREAKING_CHANGES */
 
 # endif /* USE_THE_REPOSITORY_VARIABLE */
 #endif /* ENVIRONMENT_H */

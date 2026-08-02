@@ -29,8 +29,8 @@ const char *git_editor(void)
 	const char *editor = getenv("GIT_EDITOR");
 	int terminal_is_dumb = is_terminal_dumb();
 
-	if (!editor && editor_program)
-		editor = editor_program;
+	if (!editor)
+		editor = repo_config_values(the_repository)->editor_program;
 	if (!editor && !terminal_is_dumb)
 		editor = getenv("VISUAL");
 	if (!editor)
@@ -50,7 +50,7 @@ const char *git_sequence_editor(void)
 	const char *editor = getenv("GIT_SEQUENCE_EDITOR");
 
 	if (!editor)
-		git_config_get_string_tmp("sequence.editor", &editor);
+		repo_config_get_string_tmp(the_repository, "sequence.editor", &editor);
 	if (!editor)
 		editor = git_editor();
 

@@ -27,12 +27,11 @@ prompt_given ()
 }
 
 test_expect_success 'basic usage requires no repo' '
-	test_expect_code 129 git difftool -h >output &&
+	git difftool -h >output &&
 	test_grep ^usage: output &&
 	# create a ceiling directory to prevent Git from finding a repo
 	mkdir -p not/repo &&
 	test_when_finished rm -r not &&
-	test_expect_code 129 \
 	env GIT_CEILING_DIRECTORIES="$(pwd)/not" \
 	git -C not/repo difftool -h >output &&
 	test_grep ^usage: output
@@ -431,32 +430,32 @@ test_expect_success 'setup with 2 files different' '
 test_expect_success 'say no to the first file' '
 	(echo n && echo) >input &&
 	git difftool -x cat branch <input >output &&
-	grep m2 output &&
-	grep br2 output &&
-	! grep main output &&
-	! grep branch output
+	test_grep m2 output &&
+	test_grep br2 output &&
+	test_grep ! main output &&
+	test_grep ! branch output
 '
 
 test_expect_success 'say no to the second file' '
 	(echo && echo n) >input &&
 	git difftool -x cat branch <input >output &&
-	grep main output &&
-	grep branch output &&
-	! grep m2 output &&
-	! grep br2 output
+	test_grep main output &&
+	test_grep branch output &&
+	test_grep ! m2 output &&
+	test_grep ! br2 output
 '
 
 test_expect_success 'ending prompt input with EOF' '
 	git difftool -x cat branch </dev/null >output &&
-	! grep main output &&
-	! grep branch output &&
-	! grep m2 output &&
-	! grep br2 output
+	test_grep ! main output &&
+	test_grep ! branch output &&
+	test_grep ! m2 output &&
+	test_grep ! br2 output
 '
 
 test_expect_success 'difftool --tool-help' '
 	git difftool --tool-help >output &&
-	grep tool output
+	test_grep tool output
 '
 
 test_expect_success 'setup change in subdirectory' '
@@ -647,21 +646,21 @@ test_expect_success SYMLINKS 'difftool --dir-diff --symlinks without unstaged ch
 '
 
 write_script modify-right-file <<\EOF
-echo "new content" >"$2/file"
+echo "modified content" >"$2/file"
 EOF
 
 run_dir_diff_test 'difftool --dir-diff syncs worktree with unstaged change' '
 	test_when_finished git reset --hard &&
 	echo "orig content" >file &&
 	git difftool -d $symlinks --extcmd "$PWD/modify-right-file" branch &&
-	echo "new content" >expect &&
+	echo "modified content" >expect &&
 	test_cmp expect file
 '
 
 run_dir_diff_test 'difftool --dir-diff syncs worktree without unstaged change' '
 	test_when_finished git reset --hard &&
 	git difftool -d $symlinks --extcmd "$PWD/modify-right-file" branch &&
-	echo "new content" >expect &&
+	echo "modified content" >expect &&
 	test_cmp expect file
 '
 
@@ -752,11 +751,11 @@ test_expect_success SYMLINKS 'difftool --dir-diff handles modified symlinks' '
 		c
 	EOF
 	git difftool --symlinks --dir-diff --extcmd ls >output &&
-	grep -v ^/ output >actual &&
+	grep -v ":\$" output >actual &&
 	test_cmp expect actual &&
 
 	git difftool --no-symlinks --dir-diff --extcmd ls >output &&
-	grep -v ^/ output >actual &&
+	grep -v ":\$" output >actual &&
 	test_cmp expect actual &&
 
 	# The left side contains symlink "c" that points to "b"
@@ -786,11 +785,11 @@ test_expect_success SYMLINKS 'difftool --dir-diff handles modified symlinks' '
 
 	EOF
 	git difftool --symlinks --dir-diff --extcmd ls >output &&
-	grep -v ^/ output >actual &&
+	grep -v ":\$" output >actual &&
 	test_cmp expect actual &&
 
 	git difftool --no-symlinks --dir-diff --extcmd ls >output &&
-	grep -v ^/ output >actual &&
+	grep -v ":\$" output >actual &&
 	test_cmp expect actual
 '
 

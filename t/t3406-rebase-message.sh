@@ -8,6 +8,12 @@ export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
 . ./test-lib.sh
 
 test_expect_success 'setup' '
+	# Commit dates are hardcoded to 2005, and the reflog entries will have
+	# a matching timestamp. Maintenance may thus immediately expire
+	# reflogs if it was running.
+	git config set gc.reflogExpire never &&
+	git config set gc.reflogExpireUnreachable never &&
+
 	test_commit O fileO &&
 	test_commit X fileX &&
 	git branch fast-forward &&
@@ -56,21 +62,21 @@ test_expect_success 'rebase fast-forward to main' '
 test_expect_success 'rebase --stat' '
 	git reset --hard start &&
 	git rebase --stat main >diffstat.txt &&
-	grep "^ fileX |  *1 +$" diffstat.txt
+	test_grep "^ fileX |  *1 +$" diffstat.txt
 '
 
 test_expect_success 'rebase w/config rebase.stat' '
 	git reset --hard start &&
 	git config rebase.stat true &&
 	git rebase main >diffstat.txt &&
-	grep "^ fileX |  *1 +$" diffstat.txt
+	test_grep "^ fileX |  *1 +$" diffstat.txt
 '
 
 test_expect_success 'rebase -n overrides config rebase.stat config' '
 	git reset --hard start &&
 	git config rebase.stat true &&
 	git rebase -n main >diffstat.txt &&
-	! grep "^ fileX |  *1 +$" diffstat.txt
+	test_grep ! "^ fileX |  *1 +$" diffstat.txt
 '
 
 test_expect_success 'rebase --onto outputs the invalid ref' '

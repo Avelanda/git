@@ -62,12 +62,14 @@ struct remote_state {
 void remote_state_clear(struct remote_state *remote_state);
 struct remote_state *remote_state_new(void);
 
-	enum follow_remote_head_settings {
-		FOLLOW_REMOTE_NEVER = -1,
-		FOLLOW_REMOTE_CREATE = 0,
-		FOLLOW_REMOTE_WARN = 1,
-		FOLLOW_REMOTE_ALWAYS = 2,
-	};
+#define BUILTIN_FOLLOW_REMOTE_HEAD_DFLT FOLLOW_REMOTE_CREATE
+enum follow_remote_head_settings {
+	FOLLOW_REMOTE_UNCONFIGURED = 0,
+	FOLLOW_REMOTE_NEVER,
+	FOLLOW_REMOTE_CREATE,
+	FOLLOW_REMOTE_WARN,
+	FOLLOW_REMOTE_ALWAYS,
+};
 
 struct remote {
 	struct hashmap_entry ent;
@@ -117,6 +119,8 @@ struct remote {
 	char *http_proxy_authmethod;
 
 	struct string_list server_options;
+	struct string_list negotiation_restrict;
+	struct string_list negotiation_include;
 
 	enum follow_remote_head_settings follow_remote_head;
 	const char *no_warn_branch;
@@ -331,7 +335,7 @@ struct branch {
 
 	int merge_alloc;
 
-	const char *push_tracking_ref;
+	char *push_tracking_ref;
 };
 
 struct branch *branch_get(const char *name);
@@ -346,6 +350,18 @@ const char *repo_remote_from_url(struct repository *repo, const char *url);
 int branch_has_merge_config(struct branch *branch);
 
 int branch_merge_matches(struct branch *, int n, const char *);
+
+/* list of the remote in a group as configured */
+struct remote_group_data {
+	const char *name;
+	struct string_list *list;
+};
+
+int get_remote_group(const char *key, const char *value,
+                    const struct config_context *ctx,
+                    void *priv);
+
+int add_remote_or_group(const char *name, struct string_list *list);
 
 /**
  * Return the fully-qualified refname of the tracking branch for `branch`.
@@ -418,8 +434,8 @@ struct push_cas_option {
 		unsigned use_tracking:1;
 		char *refname;
 	} *entry;
-	int nr;
-	int alloc;
+	size_t nr;
+	size_t alloc;
 };
 
 int parseopt_push_cas_option(const struct option *, const char *arg, int unset);

@@ -20,21 +20,21 @@ test_expect_success 'setup' '
 
 test_expect_success 'usage on cmd and subcommand invalid option' '
 	test_expect_code 129 git stash --invalid-option 2>usage &&
-	grep "or: git stash" usage &&
+	test_grep "or: git stash" usage &&
 
 	test_expect_code 129 git stash push --invalid-option 2>usage &&
-	! grep "or: git stash" usage
+	test_grep ! "or: git stash" usage
 '
 
 test_expect_success 'usage on main command -h emits a summary of subcommands' '
-	test_expect_code 129 git stash -h >usage &&
-	grep -F "usage: git stash list" usage &&
-	grep -F "or: git stash show" usage
+	git stash -h >usage &&
+	test_grep -F "usage: git stash list" usage &&
+	test_grep -F "or: git stash show" usage
 '
 
 test_expect_success 'usage for subcommands should emit subcommand usage' '
-	test_expect_code 129 git stash push -h >usage &&
-	grep -F "usage: git stash [push" usage
+	git stash push -h >usage &&
+	test_grep -F "usage: git stash [push" usage
 '
 
 diff_cmp () {
@@ -56,6 +56,7 @@ setup_stash() {
 	git add other-file &&
 	test_tick &&
 	git commit -m initial &&
+	git tag initial &&
 	echo 2 >file &&
 	git add file &&
 	echo 3 >file &&
@@ -902,6 +903,7 @@ test_expect_success 'branch: should not drop the stash if the apply fails' '
 
 test_expect_success 'apply: show same status as git status (relative to ./)' '
 	git stash clear &&
+	mkdir -p subdir &&
 	echo 1 >subdir/subfile1 &&
 	echo 2 >subdir/subfile2 &&
 	git add subdir/subfile1 &&
@@ -963,7 +965,7 @@ test_expect_success 'store updates stash ref and reflog' '
 	test $(git rev-parse stash) = $STASH_ID &&
 	git reflog --format=%H stash| grep $STASH_ID &&
 	git stash pop &&
-	grep quux bazzy
+	test_grep quux bazzy
 '
 
 test_expect_success 'handle stash specification with spaces' '
@@ -975,7 +977,7 @@ test_expect_success 'handle stash specification with spaces' '
 	echo cow >file &&
 	git stash &&
 	git stash apply "stash@{$stamp}" &&
-	grep pig file
+	test_grep pig file
 '
 
 test_expect_success 'setup stash with index and worktree changes' '
@@ -1356,6 +1358,7 @@ test_expect_success 'stash -k -- <pathspec> leaves unstaged files intact' '
 
 test_expect_success 'stash -- <subdir> leaves untracked files in subdir intact' '
 	git reset &&
+	mkdir -p subdir &&
 	>subdir/untracked &&
 	>subdir/tracked1 &&
 	>subdir/tracked2 &&
@@ -1372,6 +1375,7 @@ test_expect_success 'stash -- <subdir> leaves untracked files in subdir intact' 
 
 test_expect_success 'stash -- <subdir> works with binary files' '
 	git reset &&
+	mkdir -p subdir &&
 	>subdir/untracked &&
 	>subdir/tracked &&
 	cp "$TEST_DIRECTORY"/test-binary-1.png subdir/tracked-binary &&
@@ -1496,9 +1500,9 @@ test_expect_success 'stash export can accept specified stashes' '
 
 test_expect_success 'stash export rejects invalid arguments' '
 	test_must_fail git stash export --print --to-ref refs/heads/invalid 2>err &&
-	grep "exactly one of --print and --to-ref is required" err &&
+	test_grep "exactly one of --print and --to-ref is required" err &&
 	test_must_fail git stash export 2>err2 &&
-	grep "exactly one of --print and --to-ref is required" err2
+	test_grep "exactly one of --print and --to-ref is required" err2
 '
 
 test_expect_success 'stash can import and export zero stashes' '
@@ -1515,7 +1519,7 @@ test_expect_success 'stash rejects invalid attempts to import commits' '
 	git stash import foo &&
 	test_must_fail git stash import HEAD 2>output &&
 	oid=$(git rev-parse HEAD) &&
-	grep "$oid is not a valid exported stash commit" output &&
+	test_grep "$oid is not a valid exported stash commit" output &&
 	test_cmp_rev stash@{0} t-stash0 &&
 
 	git checkout --orphan orphan &&
@@ -1523,7 +1527,7 @@ test_expect_success 'stash rejects invalid attempts to import commits' '
 	git update-ref refs/heads/orphan "$(cat fake-commit)" &&
 	oid=$(git rev-parse HEAD) &&
 	test_must_fail git stash import orphan 2>output &&
-	grep "found stash commit $oid without expected prefix" output &&
+	test_grep "found stash commit $oid without expected prefix" output &&
 	test_cmp_rev stash@{0} t-stash0 &&
 
 	git checkout --orphan orphan2 &&
@@ -1531,7 +1535,7 @@ test_expect_success 'stash rejects invalid attempts to import commits' '
 	git update-ref refs/heads/orphan2 "$(cat fake-commit)" &&
 	oid=$(git rev-parse HEAD) &&
 	test_must_fail git stash import orphan2 2>output &&
-	grep "found root commit $oid with invalid data" output &&
+	test_grep "found root commit $oid with invalid data" output &&
 	test_cmp_rev stash@{0} t-stash0
 '
 
@@ -1737,8 +1741,94 @@ test_expect_success 'submodules does not affect the branch recorded in stash mes
 		git stash push -m "custom stash for work_branch" &&
 
 		git stash list >../actual_stash_list.txt &&
-		grep "On work_branch: custom stash for work_branch" ../actual_stash_list.txt
+		test_grep "On work_branch: custom stash for work_branch" ../actual_stash_list.txt
 	)
+'
+
+test_expect_success SANITIZE_LEAK 'stash show handles -- without leaking' '
+	git stash show --
+'
+
+test_expect_success 'controlled error return on unrecognized option' '
+	test_expect_code 129 git stash show -p --invalid 2>usage &&
+	test_grep -e "^usage: git stash show" usage
+'
+
+test_expect_success 'stash.index=true implies --index' '
+	# setup for a few related tests
+	test_commit file base &&
+	echo index >file &&
+	git add file &&
+	echo working >file &&
+	git stash &&
+
+	test_when_finished "git reset --hard" &&
+	git -c stash.index=true stash apply &&
+	echo index >expect &&
+	git show :0:file >actual &&
+	test_cmp expect actual &&
+	echo working >expect &&
+	test_cmp expect file
+'
+
+test_expect_success 'stash.index=true overridden by --no-index' '
+	test_when_finished "git reset --hard" &&
+	git -c stash.index=true stash apply --no-index &&
+	echo base >expect &&
+	git show :0:file >actual &&
+	test_cmp expect actual &&
+	echo working >expect &&
+	test_cmp expect file
+'
+
+test_expect_success 'stash.index=false overridden by --index' '
+	test_when_finished "git reset --hard" &&
+	git -c stash.index=false stash apply --index &&
+	echo index >expect &&
+	git show :0:file >actual &&
+	test_cmp expect actual &&
+	echo working >expect &&
+	test_cmp expect file
+'
+
+test_expect_success 'apply with custom conflict labels' '
+	git reset --hard initial &&
+	test_commit label-base conflict-file base-content &&
+	echo stashed >conflict-file &&
+	git stash push -m "stashed" &&
+	test_commit label-upstream conflict-file upstream-content &&
+	test_must_fail git -c merge.conflictStyle=diff3 stash apply --label-ours=UP --label-theirs=STASH &&
+	test_grep "^<<<<<<< UP" conflict-file &&
+	test_grep "^||||||| Stash base" conflict-file &&
+	test_grep "^>>>>>>> STASH" conflict-file
+'
+
+test_expect_success 'apply with empty conflict labels' '
+	git reset --hard initial &&
+	test_commit empty-label-base conflict-file base-content &&
+	echo stashed >conflict-file &&
+	git stash push -m "stashed" &&
+	test_commit empty-label-upstream conflict-file upstream-content &&
+	test_must_fail git stash apply --label-ours= --label-theirs= &&
+	test_grep "^<<<<<<<$" conflict-file &&
+	test_grep "^>>>>>>>$" conflict-file
+'
+
+test_expect_success 'stash show --include-untracked includes untracked files' '
+	git reset --hard &&
+
+	echo tracked >tracked &&
+	git add tracked &&
+	git commit -m "base" &&
+
+	echo change >>tracked &&
+	echo untracked >untracked &&
+
+	git stash push --include-untracked &&
+	test_path_is_missing untracked &&
+
+	git stash show --include-untracked >actual &&
+	test_grep "untracked" actual
 '
 
 test_done

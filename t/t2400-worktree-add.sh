@@ -122,7 +122,7 @@ test_expect_success 'die the same branch is already checked out' '
 	(
 		cd here &&
 		test_must_fail git checkout newmain 2>actual &&
-		grep "already used by worktree at" actual
+		test_grep "already used by worktree at" actual
 	)
 '
 
@@ -139,7 +139,7 @@ test_expect_success 'refuse to reset a branch in use elsewhere' '
 		git rev-parse --verify refs/heads/newmain >new.branch &&
 		git rev-parse --verify HEAD >new.head &&
 
-		grep "already used by worktree at" error &&
+		test_grep "already used by worktree at" error &&
 		test_cmp old.branch new.branch &&
 		test_cmp old.head new.head &&
 
@@ -328,7 +328,7 @@ test_wt_add_excl () {
 	local opts="$*" &&
 	test_expect_success "'worktree add' with '$opts' has mutually exclusive options" '
 		test_must_fail git worktree add $opts 2>actual &&
-		grep -E "fatal:( options)? .* cannot be used together" actual
+		test_grep -E "fatal:( options)? .* cannot be used together" actual
 	'
 }
 
@@ -436,13 +436,13 @@ test_wt_add_orphan_hint () {
 		(cd repo && test_commit commit) &&
 		git -C repo switch --orphan noref &&
 		test_must_fail git -C repo worktree add $opts foobar/ 2>actual &&
-		! grep "error: unknown switch" actual &&
-		grep "hint: If you meant to create a worktree containing a new unborn branch" actual &&
+		test_grep ! "error: unknown switch" actual &&
+		test_grep "hint: If you meant to create a worktree containing a new unborn branch" actual &&
 		if [ $use_branch -eq 1 ]
 		then
-			grep -E "^hint: +git worktree add --orphan -b [^ ]+ [^ ]+$" actual
+			test_grep -E "^hint: +git worktree add --orphan -b [^ ]+ [^ ]+$" actual
 		else
-			grep -E "^hint: +git worktree add --orphan [^ ]+$" actual
+			test_grep -E "^hint: +git worktree add --orphan [^ ]+$" actual
 		fi
 
 	'
@@ -457,8 +457,8 @@ test_expect_success "'worktree add' doesn't show orphan hint in bad/orphan HEAD 
 	git init repo &&
 	(cd repo && test_commit commit) &&
 	test_must_fail git -C repo worktree add --quiet foobar_branch foobar/ 2>actual &&
-	! grep "error: unknown switch" actual &&
-	! grep "hint: If you meant to create a worktree containing a new unborn branch" actual
+	test_grep ! "error: unknown switch" actual &&
+	test_grep ! "hint: If you meant to create a worktree containing a new unborn branch" actual
 '
 
 test_expect_success 'local clone from linked checkout' '
@@ -469,7 +469,7 @@ test_expect_success 'local clone from linked checkout' '
 test_expect_success 'local clone --shared from linked checkout' '
 	git -C bare worktree add --detach ../baretree &&
 	git clone --local --shared baretree bare-clone &&
-	grep /bare/ bare-clone/.git/objects/info/alternates
+	test_grep /bare/ bare-clone/.git/objects/info/alternates
 '
 
 test_expect_success '"add" worktree with --no-checkout' '
@@ -491,7 +491,7 @@ test_expect_success 'put a worktree under rebase' '
 		set_fake_editor &&
 		FAKE_LINES="edit 1" git rebase -i HEAD^ &&
 		git worktree list >actual &&
-		grep "under-rebase.*detached HEAD" actual
+		test_grep "under-rebase.*detached HEAD" actual
 	)
 '
 
@@ -533,7 +533,7 @@ test_expect_success 'checkout a branch under bisect' '
 		git bisect bad &&
 		git bisect good HEAD~2 &&
 		git worktree list >actual &&
-		grep "under-bisect.*detached HEAD" actual &&
+		test_grep "under-bisect.*detached HEAD" actual &&
 		test_must_fail git worktree add new-bisect under-bisect &&
 		test_path_is_missing new-bisect
 	)
@@ -987,7 +987,7 @@ test_dwim_orphan () {
 				then
 					test_must_be_empty actual
 				else
-					grep "$info_text" actual
+					test_grep "$info_text" actual
 				fi
 			elif [ "$outcome" = "no_infer" ]
 			then
@@ -996,39 +996,35 @@ test_dwim_orphan () {
 				then
 					test_must_be_empty actual
 				else
-					! grep "$info_text" actual
+					test_grep ! "$info_text" actual
 				fi
 			elif [ "$outcome" = "fetch_error" ]
 			then
 				test_must_fail git $dashc_args worktree add $args 2>actual &&
-				grep "$fetch_error_text" actual
+				test_grep "$fetch_error_text" actual
 			elif [ "$outcome" = "fatal_orphan_bad_combo" ]
 			then
 				test_must_fail git $dashc_args worktree add $args 2>actual &&
 				if [ $use_quiet -eq 1 ]
 				then
-					! grep "$info_text" actual
+					test_grep ! "$info_text" actual
 				else
-					grep "$info_text" actual
+					test_grep "$info_text" actual
 				fi &&
-				grep "$bad_combo_regex" actual
+				test_grep "$bad_combo_regex" actual
 			elif [ "$outcome" = "warn_bad_head" ]
 			then
 				test_must_fail git $dashc_args worktree add $args 2>actual &&
 				if [ $use_quiet -eq 1 ]
 				then
-					grep "$invalid_ref_regex" actual &&
-					! grep "$orphan_hint" actual
+					test_grep "$invalid_ref_regex" actual &&
+					test_grep ! "$orphan_hint" actual
 				else
-					headpath=$(git $dashc_args rev-parse --path-format=absolute --git-path HEAD) &&
-					headcontents=$(cat "$headpath") &&
-					grep "HEAD points to an invalid (or orphaned) reference" actual &&
-					grep "HEAD path: .$headpath." actual &&
-					grep "HEAD contents: .$headcontents." actual &&
-					grep "$orphan_hint" actual &&
-					! grep "$info_text" actual
+					test_grep "HEAD points to an invalid (or orphaned) reference" actual &&
+					test_grep "$orphan_hint" actual &&
+					test_grep ! "$info_text" actual
 				fi &&
-				grep "$invalid_ref_regex" actual
+				test_grep "$invalid_ref_regex" actual
 			else
 				# Unreachable
 				false

@@ -9,6 +9,7 @@
 #include "builtin.h"
 #include "advice.h"
 #include "config.h"
+#include "environment.h"
 #include "lockfile.h"
 #include "dir.h"
 #include "gettext.h"
@@ -271,7 +272,7 @@ int cmd_rm(int argc,
 	struct pathspec pathspec;
 	char *seen;
 
-	git_config(git_default_config, NULL);
+	repo_config(the_repository, git_default_config, NULL);
 
 	argc = parse_options(argc, argv, prefix, builtin_rm_options,
 			     builtin_rm_usage, 0);
@@ -295,7 +296,7 @@ int cmd_rm(int argc,
 		die(_("No pathspec was given. Which files should I remove?"));
 
 	if (!index_only)
-		setup_work_tree();
+		setup_work_tree(the_repository);
 
 	prepare_repo_settings(the_repository);
 	the_repository->settings.command_requires_full_index = 0;
